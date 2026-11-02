@@ -16,6 +16,7 @@
 - Storyboard shot cards now include generation mode, model/version, references, start/end state, acceptance criteria, failure modes, and fallback.
 - Delivery package now requires video prompt documentation and QC/iteration records when video output exists.
 - README documents FFmpeg dependency and the distinction between technical checks and semantic review.
+- `video_qc.py` works with FFmpeg alone when `ffprobe` is unavailable, and includes a macOS AVFoundation fallback for metadata/frame extraction.
 
 ### Clarified
 

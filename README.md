@@ -61,7 +61,7 @@ Style Lock
 
 ## 安装
 
-要求：支持读取 `SKILL.md` 的 Codex 环境。视频质检脚本建议安装 Python 3.9+、`ffmpeg` 和 `ffprobe`。macOS 在缺少 FFmpeg 时可尝试用 `xcrun clang` 和 AVFoundation 提取元数据与关键帧；黑帧、冻结帧和场景切点检测仍需要 FFmpeg。
+要求：支持读取 `SKILL.md` 的 Codex 环境。视频质检脚本建议安装 Python 3.9+ 和 `ffmpeg`；`ffprobe` 可选，缺少时会从 FFmpeg 输入摘要读取基础元数据。macOS 在缺少 FFmpeg 时可尝试用 `xcrun clang` 和 AVFoundation 提取元数据与关键帧；黑帧、冻结帧和场景切点检测仍需要 FFmpeg。
 
 ```bash
 git clone <your-repo-url> short-drama-production-agent
