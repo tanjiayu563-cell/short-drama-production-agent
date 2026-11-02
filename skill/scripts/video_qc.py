@@ -59,6 +59,55 @@ def parse_ratio(value: str) -> float:
     return left / right
 
 
+def probe_with_ffmpeg(ffmpeg: str, video: Path) -> dict[str, Any]:
+    """Build minimal media metadata from ffmpeg's input summary when ffprobe is absent."""
+    result = run([ffmpeg, "-hide_banner", "-i", str(video)], timeout=60)
+    text = result.stderr
+    duration_match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
+    duration = None
+    if duration_match:
+        hours, minutes, seconds = duration_match.groups()
+        duration = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    video_line = next(
+        (line for line in text.splitlines() if re.search(r"Stream .*Video:", line)),
+        None,
+    )
+    if not video_line:
+        die("ffmpeg reported no video stream")
+    size_match = re.search(r"(?<!\d)(\d{2,6})x(\d{2,6})(?!\d)", video_line)
+    width = int(size_match.group(1)) if size_match else None
+    height = int(size_match.group(2)) if size_match else None
+    fps_match = re.search(r"([0-9.]+)\s+fps", video_line)
+    fps = float(fps_match.group(1)) if fps_match else None
+    audio_count = sum(1 for line in text.splitlines() if re.search(r"Stream .*Audio:", line))
+    format_match = re.search(r"Input #0,\s*([^,]+)", text)
+    input_format = format_match.group(1).strip() if format_match else video.suffix.lstrip(".")
+    bitrate_match = re.search(r"bitrate:\s*(\d+)\s*kb/s", text)
+    bitrate = str(int(bitrate_match.group(1)) * 1000) if bitrate_match else None
+    streams: list[dict[str, Any]] = [
+        {
+            "codec_type": "video",
+            "width": width,
+            "height": height,
+            "avg_frame_rate": f"{fps}/1" if fps is not None else None,
+            "r_frame_rate": f"{fps}/1" if fps is not None else None,
+            "duration": duration,
+        }
+    ]
+    for _ in range(audio_count):
+        streams.append({"codec_type": "audio"})
+    return {
+        "format": {
+            "duration": duration,
+            "size": str(video.stat().st_size),
+            "bit_rate": bitrate,
+            "format_name": input_format,
+        },
+        "streams": streams,
+        "probe_backend": "ffmpeg-input-summary",
+    }
+
+
 def probe_video(ffprobe: str, video: Path) -> dict[str, Any]:
     cmd = [
         ffprobe,
@@ -373,8 +422,8 @@ def main() -> None:
     ffmpeg = args.ffmpeg or shutil.which("ffmpeg")
     ffprobe = args.ffprobe or shutil.which("ffprobe")
     backend = "ffmpeg"
-    if ffmpeg and ffprobe:
-        probe = probe_video(ffprobe, video)
+    if ffmpeg:
+        probe = probe_video(ffprobe, video) if ffprobe else probe_with_ffmpeg(ffmpeg, video)
         video_stream, audio_streams = stream_summary(probe)
         if not video_stream:
             die("no video stream found")
