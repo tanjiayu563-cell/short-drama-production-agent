@@ -1,6 +1,6 @@
 interface:
   display_name: "短剧制作工作台"
-  short_description: "从创意或剧本生成全流程视觉方案、制作清单与可执行文本分镜"
-  default_prompt: "使用 $short-drama-production，把我的短剧创意或剧本制作成包含视觉方案、制作清单与逐镜分镜的完整文本制作包。"
+  short_description: "从剧本生成模型适配分镜与视频提示词，并质检生成视频、迭代修正"
+  default_prompt: "使用 $short-drama-production，把我的短剧创意或剧本制作成包含视觉方案、逐镜分镜和视频提示词的制作包；如有生成视频，请质检并给出下一轮修改。"
 policy:
   allow_implicit_invocation: true
