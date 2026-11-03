@@ -195,10 +195,10 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
     <div class="panel-head">
       <div>
         <div class="panel-title">01 · 小说文本</div>
-        <div class="panel-subtitle" id="textMeta">粘贴或导入 .txt / .md 文件</div>
+        <div class="panel-subtitle" id="textMeta">粘贴或导入 .txt / .md / .epub；EPUB 在浏览器本地解析</div>
       </div>
-      <label class="btn btn-small" for="textFileInput">导入文本</label>
-      <input class="hidden" type="file" id="textFileInput" accept=".txt,.md,.markdown,text/plain,text/markdown">
+      <label class="btn btn-small" for="textFileInput">导入文本 / EPUB</label>
+      <input class="hidden" type="file" id="textFileInput" accept=".txt,.md,.markdown,.epub,text/plain,text/markdown,application/epub+zip">
     </div>
     <div class="panel-body">
       <textarea class="novel-input" id="novelText" spellcheck="false" placeholder="粘贴小说或剧本文本，然后在文本中用鼠标选中要改编的区域。"></textarea>
@@ -360,6 +360,7 @@ function defaultState() {
   return {
     version: 1,
     projectName: "门外的第二份外卖",
+    textSourceName: "内置示例",
     novelText: sampleText,
     selection: "",
     activeAssetTab: "character",
@@ -424,8 +425,10 @@ function toast(message) {
 function persist() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return true;
   } catch (error) {
     console.warn("autosave failed", error);
+    return false;
   }
 }
 
@@ -870,10 +873,165 @@ function autoMatchedNames() {
   return state.assets.filter(a => state.selectedAssetIds.includes(a.id)).map(a => a.name);
 }
 
-function saveTextFile(file) {
+function normalizeZipPath(baseDir, href) {
+  const parts = `${baseDir}/${href}`.split("/");
+  const out = [];
+  for (const part of parts) {
+    if (!part || part === ".") continue;
+    if (part === "..") out.pop();
+    else out.push(part);
+  }
+  return out.join("/");
+}
+
+async function unzipEpub(file) {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("不是有效的 EPUB/ZIP 文件");
+  const count = view.getUint16(eocd + 10, true);
+  const centralOffset = view.getUint32(eocd + 16, true);
+  const decoder = new TextDecoder("utf-8");
+  const entries = new Map();
+  let pointer = centralOffset;
+  for (let i = 0; i < count; i++) {
+    if (pointer + 46 > bytes.length || view.getUint32(pointer, true) !== 0x02014b50) break;
+    const method = view.getUint16(pointer + 10, true);
+    const compressedSize = view.getUint32(pointer + 20, true);
+    const uncompressedSize = view.getUint32(pointer + 24, true);
+    const nameLength = view.getUint16(pointer + 28, true);
+    const extraLength = view.getUint16(pointer + 30, true);
+    const commentLength = view.getUint16(pointer + 32, true);
+    const localOffset = view.getUint32(pointer + 42, true);
+    const name = decoder.decode(bytes.slice(pointer + 46, pointer + 46 + nameLength));
+    entries.set(name, { method, compressedSize, uncompressedSize, localOffset });
+    pointer += 46 + nameLength + extraLength + commentLength;
+  }
+  async function read(name) {
+    const entry = entries.get(name);
+    if (!entry) throw new Error(`EPUB 缺少文件：${name}`);
+    const local = entry.localOffset;
+    if (view.getUint32(local, true) !== 0x04034b50) throw new Error("EPUB 本地文件头无效");
+    const nameLength = view.getUint16(local + 26, true);
+    const extraLength = view.getUint16(local + 28, true);
+    const start = local + 30 + nameLength + extraLength;
+    const compressed = bytes.slice(start, start + entry.compressedSize);
+    if (entry.method === 0) return new Uint8Array(compressed);
+    if (entry.method !== 8) throw new Error(`不支持的 EPUB 压缩方式：${entry.method}`);
+    if (typeof DecompressionStream === "undefined") throw new Error("当前浏览器不支持本地 EPUB 解压，请改用 TXT");
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  return { read, decoder, has: name => entries.has(name) };
+}
+
+function bodyTextFromHtml(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const blocks = new Set(["p","div","section","article","h1","h2","h3","h4","h5","h6","li","blockquote","tr","br"]);
+  const skip = new Set(["script","style","svg","noscript"]);
+  const parts = [];
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      parts.push(node.nodeValue || "");
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    const tag = node.tagName.toLowerCase();
+    if (skip.has(tag)) return;
+    if (blocks.has(tag)) parts.push("\n");
+    for (const child of node.childNodes) walk(child);
+    if (blocks.has(tag)) parts.push("\n");
+  }
+  if (doc.body) walk(doc.body);
+  return parts.join("").replace(/\r/g, "").split("\n").map(line => line.replace(/[ \t\f\v]+/g, " ").trim()).filter(Boolean).join("\n").trim();
+}
+
+function firstHeadingFromHtml(html) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const el = doc.querySelector("h1, h2");
+  return el ? (el.textContent || "").replace(/\s+/g, " ").trim() : "";
+}
+
+async function importEpub(file) {
+  const zip = await unzipEpub(file);
+  if (!zip.has("META-INF/container.xml")) throw new Error("EPUB 缺少 container.xml，可能受 DRM 保护");
+  const containerXml = zip.decoder.decode(await zip.read("META-INF/container.xml"));
+  const containerDoc = new DOMParser().parseFromString(containerXml, "application/xml");
+  const rootfile = [...containerDoc.getElementsByTagName("*")].find(el => el.localName === "rootfile");
+  if (!rootfile) throw new Error("EPUB 未找到 OPF 内容清单");
+  const opfPath = rootfile.getAttribute("full-path");
+  const opfBase = opfPath.includes("/") ? opfPath.slice(0, opfPath.lastIndexOf("/")) : "";
+  const opfXml = zip.decoder.decode(await zip.read(opfPath));
+  const opfDoc = new DOMParser().parseFromString(opfXml, "application/xml");
+  const titleEl = [...opfDoc.getElementsByTagName("*")].find(el => el.localName === "title");
+  const creatorEl = [...opfDoc.getElementsByTagName("*")].find(el => el.localName === "creator");
+  const bookTitle = titleEl?.textContent?.trim() || file.name.replace(/\.epub$/i, "");
+  const creator = creatorEl?.textContent?.trim() || "";
+  const manifest = new Map();
+  [...opfDoc.getElementsByTagName("*")].forEach(el => {
+    if (el.localName === "item" && el.getAttribute("id")) manifest.set(el.getAttribute("id"), {
+      href: el.getAttribute("href") || "",
+      mediaType: el.getAttribute("media-type") || ""
+    });
+  });
+  const spine = [...opfDoc.getElementsByTagName("*")].filter(el => el.localName === "itemref").map(el => el.getAttribute("idref"));
+  const chapters = [];
+  for (const idref of spine) {
+    const item = manifest.get(idref);
+    if (!item) continue;
+    const href = item.href || "";
+    if (!/html|xhtml|htm/i.test(item.mediaType) && !/\.(html|xhtml|htm)$/i.test(href)) continue;
+    const path = normalizeZipPath(opfBase, href);
+    if (!zip.has(path)) continue;
+    const html = zip.decoder.decode(await zip.read(path));
+    const heading = firstHeadingFromHtml(html);
+    if (["Cover","Contents","目录"].includes(heading)) continue;
+    let body = bodyTextFromHtml(html);
+    if (!body) continue;
+    if (heading) {
+      const normalizedHeading = heading.replace(/\s+/g, "");
+      const firstLine = body.split("\n")[0] || "";
+      if (firstLine.replace(/\s+/g, "") === normalizedHeading) {
+        body = body.split("\n").slice(1).join("\n").trim();
+      }
+    }
+    if (!body) continue;
+    chapters.push({ heading: heading || `章节 ${chapters.length + 1}`, body });
+  }
+  if (!chapters.length) throw new Error("EPUB 中没有提取到可用正文");
+  const text = `${bookTitle}\n${creator ? `作者：${creator}\n` : ""}\n${chapters.map(ch => `${ch.heading}\n${ch.body}`).join("\n\n")}`;
+  state.novelText = text;
+  state.textSourceName = file.name;
+  state.projectName = bookTitle.replace(/[（(].*$/, "").trim() || bookTitle;
+  state.selection = "";
+  state.bookChapterCount = chapters.length;
+  novelText.value = text;
+  updateTextMeta();
+  renderSelection();
+  persist();
+  if (persist() === false) toast("EPUB 已解析，但文本过大，浏览器自动保存可能失败；请及时导出项目");
+  else toast(`EPUB 已解析：${chapters.length} 章`);
+  $("textFileInput").value = "";
+}
+
+async function saveTextFile(file) {
+  if (/\.epub$/i.test(file.name)) {
+    try {
+      await importEpub(file);
+    } catch (error) {
+      console.error(error);
+      toast(`EPUB 导入失败：${error.message || "文件无法解析"}`);
+    }
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     state.novelText = String(reader.result || "");
+    state.textSourceName = file.name;
     novelText.value = state.novelText;
     state.selection = "";
     updateTextMeta();
@@ -883,7 +1041,9 @@ function saveTextFile(file) {
 }
 
 function updateTextMeta() {
-  $("textMeta").textContent = `${state.novelText.length.toLocaleString()} 字符 · 选区会保留在此项目中`;
+  const source = state.textSourceName ? `${state.textSourceName} · ` : "";
+  const chapters = state.bookChapterCount ? `${state.bookChapterCount} 章 · ` : "";
+  $("textMeta").textContent = `${source}${chapters}${state.novelText.length.toLocaleString()} 字符 · 选区会保留在此项目中`;
 }
 
 function downloadTextFile(name, content, type = "text/plain;charset=utf-8") {
@@ -950,7 +1110,7 @@ function bind() {
   });
   $("exportProjectBtn").addEventListener("click", exportProject);
   $("importProjectInput").addEventListener("change", e => { if (e.target.files[0]) importProject(e.target.files[0]); });
-  $("textFileInput").addEventListener("change", e => { if (e.target.files[0]) saveTextFile(e.target.files[0]); });
+  $("textFileInput").addEventListener("change", async e => { if (e.target.files[0]) await saveTextFile(e.target.files[0]); });
   $("addAssetBtn").addEventListener("click", () => openAssetDialog());
   $("closeAssetDialog").addEventListener("click", () => $("assetDialog").close());
   $("assetForm").addEventListener("submit", saveAssetFromForm);
