@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.3.0 — 2026-11-03
+
+### Added
+
+- Selection-level adaptation rules for deciding visual action, dialogue, voice-over, off-screen sound, text inserts, performance, or omission.
+- Scene-level relationship mapping with explicit versus inferred relationships, power distance, concealment, and spatial blocking.
+- Anti-repetition shot grammar and a selection-to-beat workbench that produces up to six differentiated beats.
+- Workbench relationship display, beat cards, apply-to-shot action, and copyable storyboard plan.
+
+### Changed
+
+- The Agent now produces a visual/narration allocation table, relationship map, and shot-variety audit before final prompts.
+- The local workbench can distinguish dialogue, internal thought, text clues, sound cues, action, and exposition before generating prompts.
+
 ## v1.2.0 — 2026-11-03
 
 ### Added

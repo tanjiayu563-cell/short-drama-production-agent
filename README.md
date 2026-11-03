@@ -29,6 +29,9 @@
 - **Seedance 适配**：包含 Seedance 2.0/2.5 的已核实能力、时间分段、多模态参考和长视频延长写法。
 - **MiniMax H3 适配**：支持 T2V、图片/首尾帧、图片/视频/音频参考、原生声音、4–15 秒输出和角色/场景一致性锁定。
 - **小说选区工作台**：导入 `.txt` / `.md` / `.epub` 小说文本，鼠标选中一个区域，自动匹配人物/场景/道具资产，生成 H3 单镜提示词。
+- **画面/旁白判断**：逐节拍判断哪些信息应直接可见、哪些用对白、画外声、文字插入，只有无法视觉化时才用短旁白。
+- **人物关系图**：记录亲属、权力、信任、隐瞒、空间阻隔和场景内变化，用站位、距离、视线和道具呈现关系。
+- **镜头去重复**：避免连续三个节拍同一景别，不把每句台词拍成同一种近景，并为每个镜头要求明确叙事功能。
 - **生成视频质检**：提取元数据、抽样帧、联系表和技术事件，再由 Agent 对照原镜头任务做语义质检。
 - **迭代闭环**：输出带时间点的问题、根因、P0/P1/P2 分级、下一版完整提示词和单变量回归记录。
 - **质量闸门**：用 10 项硬性检查和 9 类验收场景识别不可交付结果。
@@ -123,6 +126,8 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 - 建立人物、场景和道具资产库；
 - 每个资产可导入图片，或只写文字描述和一致性锁；
 - 根据选区自动匹配名称/别名；
+- 自动拆解为最多 6 个叙事节拍，标注画面、对白、旁白、声音和关系调度；
+- 自动给出不同景别/机位/运镜建议，并检查连续重复；
 - 生成 MiniMax H3 单镜提示词；
 - 提示 7000 字符上限、9 张图片上限和总参考文件上限；
 - 导出项目 JSON、提示词 Markdown 和版本记录。
@@ -157,6 +162,7 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   │   ├── video-model-prompting.md
 │   │   ├── seedance-prompting.md
 │   │   ├── minimax-h3-prompting.md
+│   │   ├── adaptation-and-shot-variety.md
 │   │   ├── generated-video-qc.md
 │   │   ├── production-handoff.md
 │   │   ├── quality-gates.md
@@ -165,6 +171,7 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   │   ├── production-bible-template.md
 │   │   ├── video-prompt-pack-template.md
 │   │   ├── minimax-h3-shot-template.md
+│   │   ├── scene-adaptation-template.md
 │   │   ├── video-qc-report-template.md
 │   │   ├── iteration-log-template.md
 │   │   ├── style-option-template.md
