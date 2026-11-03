@@ -32,6 +32,20 @@
 - 文件选择器不可用时，可直接粘贴 JSON 导入；
 - 最近 10 个版本记录。
 
+## 自动调用 MiniMax H3
+
+1. 在终端设置 `MINIMAX_API_KEY`；
+2. 运行：
+   ```bash
+   python3 skills/short-drama-production/scripts/local_server.py --port 8787
+   ```
+   如果从仓库运行，路径改为 `skill/scripts/local_server.py`；
+3. 打开 `http://127.0.0.1:8787/workbench/index.html`；
+4. 生成并确认当前镜头；
+5. 点击“确认并生成 H3”。
+
+默认使用 4 秒、768P、9:16、单镜生成，适合低成本首测。API Key 不会进入浏览器。
+
 ## 注意
 
 - 大体积 EPUB 可能超过浏览器自动保存容量；如果导入后提示自动保存失败，当前页面仍可继续使用，重新打开时需要重新导入。

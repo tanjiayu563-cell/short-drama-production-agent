@@ -272,7 +272,7 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
       <div class="field-grid three">
         <div class="field"><label for="shotId">镜号</label><input id="shotId" value="S01-01"></div>
         <div class="field"><label for="duration">时长（秒）</label><select id="duration"></select></div>
-        <div class="field"><label for="resolution">分辨率</label><select id="resolution"><option>768P</option><option selected>2K</option></select></div>
+        <div class="field"><label for="resolution">分辨率</label><select id="resolution"><option selected>768P</option><option>2K</option></select></div>
         <div class="field"><label for="ratio">画幅</label><select id="ratio"><option selected>9:16</option><option>16:9</option><option>1:1</option><option>4:3</option><option>adaptive</option></select></div>
         <div class="field"><label for="mode">生成模式</label><select id="mode"><option value="reference">参考生成</option><option value="i2v">首帧图生视频</option><option value="first-last">首尾帧</option><option value="t2v">文生视频</option></select></div>
         <div class="field"><label for="camera">运镜</label><input id="camera" value="[static]" placeholder="例如 [static]、[zoom]、[pan]"></div>
@@ -312,6 +312,30 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
       <div class="toolbar" style="margin-top:10px">
         <button class="btn btn-primary" id="copyPromptBtn">复制 H3 提示词</button>
         <button class="btn btn-small" id="downloadPromptBtn">下载 Markdown</button>
+      </div>
+      <div class="hr"></div>
+      <div class="toolbar" style="justify-content:space-between;margin-bottom:9px">
+        <div>
+          <div class="panel-title" style="font-size:12px">H3 自动文生视频</div>
+          <div class="panel-subtitle">经济默认：单镜确认、4 秒、768P；不会自动批量消耗额度</div>
+        </div>
+        <button class="btn btn-small" id="checkApiBtn">检查本地服务</button>
+      </div>
+      <div class="field-grid">
+        <div class="field"><label for="apiBase">本地 API 服务</label><input id="apiBase" value="http://127.0.0.1:8787"></div>
+        <div class="field"><label for="apiStatus">连接状态</label><input id="apiStatus" value="尚未检查" readonly></div>
+      </div>
+      <label class="form-check" style="margin-top:10px;display:flex;gap:8px;align-items:flex-start;color:var(--muted);font-size:12px">
+        <input type="checkbox" id="confirmGenerate">
+        我已确认当前镜头的人物、场景、时长、画幅和提示词。调用将使用 MiniMax-H3 文生视频；当前服务不上传本地图片，只把文字资产锁定写入提示词。
+      </label>
+      <div class="toolbar" style="margin-top:9px">
+        <button class="btn btn-primary" id="generateH3Btn" disabled>确认并生成 H3</button>
+        <span class="model-note" id="generationStatus">等待确认</span>
+      </div>
+      <video id="generatedVideo" class="hidden" controls style="width:100%;max-height:360px;margin-top:10px;border-radius:12px;background:#000"></video>
+      <div class="model-note" style="margin-top:10px">
+        需要先在终端设置 MINIMAX_API_KEY，再运行本地服务。API Key 不会进入浏览器或项目 JSON。
       </div>
       <div class="model-note" style="margin-top:12px">
         H3 官方提示词上限 7000 字符；参考输入图片 ≤9、视频 ≤3、音频 ≤3，混合文件 ≤12。规格会随产品版本变化，生成前请核对当前入口。
@@ -422,8 +446,9 @@ function defaultState() {
     assets: sampleAssets.map(a => ({ ...a })),
     settings: {
       shotId: "S01-01",
-      duration: 8,
-      resolution: "2K",
+      duration: 4,
+      resolution: "768P",
+      apiBase: "http://127.0.0.1:8787",
       ratio: "9:16",
       mode: "reference",
       camera: "[static]",
@@ -444,12 +469,14 @@ function defaultState() {
       { a: "C01", b: "C02", label: "陌生 / 互相试探", note: "林夏是住户，陈默是外卖员；两人在门链两侧建立第一次不信任接触。" }
     ],
     lastAdaptation: null,
+    generationJobs: [],
     history: [],
     lastPrompt: ""
   };
 }
 
 let state = loadState() || defaultState();
+if (!Array.isArray(state.generationJobs)) state.generationJobs = [];
 let selectedImageData = "";
 let selectedImageName = "";
 
@@ -463,6 +490,12 @@ const consistencyStatus = $("consistencyStatus");
 const relationList = $("relationList");
 const adaptationPanel = $("adaptationPanel");
 const promptOutput = $("promptOutput");
+const apiBaseInput = $("apiBase");
+const apiStatusInput = $("apiStatus");
+const confirmGenerateInput = $("confirmGenerate");
+const generateH3Btn = $("generateH3Btn");
+const generationStatus = $("generationStatus");
+const generatedVideo = $("generatedVideo");
 const promptLength = $("promptLength");
 const promptStatus = $("promptStatus");
 const historyList = $("historyList");
@@ -511,7 +544,7 @@ function initForm() {
   duration.innerHTML = "";
   for (let i = 4; i <= 15; i++) duration.add(new Option(`${i} 秒`, String(i)));
   duration.value = String(state.settings.duration || 8);
-  ["resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"].forEach(key => {
+  ["resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative","apiBase"].forEach(key => {
     const el = $(key);
     if (el && state.settings[key] !== undefined) el.value = state.settings[key];
   });
@@ -520,7 +553,7 @@ function initForm() {
 
 function collectSettings() {
   state.projectName = $("projectName").value.trim() || "未命名项目";
-  const keys = ["shotId","resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"];
+  const keys = ["shotId","resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative","apiBase"];
   keys.forEach(key => state.settings[key] = $(key).value);
   state.settings.duration = Number($("duration").value);
   persist();
@@ -587,11 +620,61 @@ function renderAssets() {
   renderRelationships();
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getRelationsForSelected() {
+  const selected = selectedAssets();
+  const ids = new Set(selected.map(a => a.id));
+  const base = (state.relations || []).filter(rel => ids.has(rel.a) && ids.has(rel.b)).map(rel => ({ ...rel, source: "asset", confidence: rel.confidence || "明确" }));
+  if (!state.selection) return base;
+  const terms = detectRelationTerms(state.selection);
+  const inferred = [];
+  const pairs = new Set(base.map(rel => `${rel.a}|${rel.b}`));
+  for (const a of selected) {
+    for (const b of selected) {
+      if (a.id === b.id) continue;
+      const namesA = [a.name, ...(a.aliases || [])].filter(x => String(x).trim().length >= 2).map(String);
+      const namesB = [b.name, ...(b.aliases || [])].filter(x => String(x).trim().length >= 2).map(String);
+      let found = null;
+      for (const term of terms) {
+        for (const na of namesA) {
+          for (const nb of namesB) {
+            const ea = escapeRegExp(na);
+            const eb = escapeRegExp(nb);
+            const patterns = [
+              new RegExp(`${ea}[^。！？\\n]{0,8}(?:的)?${escapeRegExp(term)}[^。！？\\n]{0,12}${eb}`),
+              new RegExp(`${eb}[^。！？\\n]{0,8}(?:是|就是)[^。！？\\n]{0,8}${ea}的?${escapeRegExp(term)}`),
+              new RegExp(`${ea}[^。！？\\n]{0,8}(?:和|与|跟)${eb}[^。！？\\n]{0,8}(?:是|为)?${escapeRegExp(term)}`)
+            ];
+            if (patterns.some(pattern => pattern.test(state.selection))) {
+              found = { a: a.id, b: b.id, label: `${term}关系（${a.name} → ${b.name}）`, note: `自动识别到「${term}」称谓；请确认方向与具体亲属含义。`, source: "text", confidence: "推断" };
+              break;
+            }
+          }
+          if (found) break;
+        }
+        if (found) break;
+      }
+      const pairKey = `${a.id}|${b.id}`;
+      if (!found && terms.length && namesA.some(n => state.selection.includes(n)) && namesB.some(n => state.selection.includes(n)) && !pairs.has(pairKey)) {
+        found = { a: a.id, b: b.id, label: "同场出现 / 关系待确认", note: `选区同时出现 ${a.name} 与 ${b.name}，文内称谓：${terms.join("、")}；系统不擅自指定关系。`, source: "text", confidence: "待确认" };
+      }
+      if (found && !pairs.has(pairKey)) {
+        inferred.push(found);
+        pairs.add(pairKey);
+      }
+    }
+  }
+  return [...base, ...inferred];
+}
+
 function renderRelationships() {
   if (!relationList) return;
   const selectedIds = new Set(state.selectedAssetIds);
   const selected = state.assets.filter(a => selectedIds.has(a.id));
-  const relations = (state.relations || []).filter(rel => selectedIds.has(rel.a) && selectedIds.has(rel.b));
+  const relations = getRelationsForSelected();
   if (!selected.length) {
     relationList.innerHTML = `<span class="model-note">选中人物或场景后显示关系。</span>`;
     return;
@@ -605,7 +688,7 @@ function renderRelationships() {
   relationList.innerHTML = termHtml + relations.map(rel => {
     const a = state.assets.find(x => x.id === rel.a);
     const b = state.assets.find(x => x.id === rel.b);
-    const label = `${a?.name || rel.a} ↔ ${b?.name || rel.b} · ${rel.label || "关系待确认"}`;
+    const label = `${a?.name || rel.a} ↔ ${b?.name || rel.b} · ${rel.label || "关系待确认"}${rel.confidence === "待确认" ? " · 待确认" : ""}`;
     return `<span class="relation-chip" title="${escapeHTML(rel.note || "")}">${escapeHTML(label)}</span>`;
   }).join("");
 }
@@ -724,10 +807,7 @@ function dialogueQuotes(text) {
 }
 
 function relationTextForBeat(selected) {
-  const relationPairs = (state.relations || []).filter(rel => {
-    const ids = new Set(selected.map(a => a.id));
-    return ids.has(rel.a) && ids.has(rel.b);
-  });
+  const relationPairs = getRelationsForSelected();
   if (relationPairs.length) {
     return relationPairs.map(rel => {
       const a = state.assets.find(x => x.id === rel.a)?.name || rel.a;
@@ -873,7 +953,7 @@ function autoBreakdown() {
   const totalGenerationSeconds = beadsTotal(beats, "generationSeconds");
   state.lastAdaptation = {
     beats,
-    relationships: (state.relations || []).filter(rel => new Set(selected.map(a => a.id)).has(rel.a) && new Set(selected.map(a => a.id)).has(rel.b)),
+    relationships: getRelationsForSelected(),
     summary: { shotCount: beats.length, totalEditSeconds, totalGenerationSeconds, pacing },
     detectedRelationTerms: detectRelationTerms(state.selection)
   };
@@ -1022,7 +1102,7 @@ function makeBeats(text, duration) {
   }).join("\n");
 }
 
-function buildPrompt() {
+function buildPrompt(textOnly = false) {
   collectSettings();
   if (!state.selection.trim()) {
     toast("请先选中小说的一个区域");
@@ -1032,9 +1112,10 @@ function buildPrompt() {
   const duration = Math.max(4, Math.min(15, Number(state.settings.duration) || 8));
   let imageIndex = 0;
   const refs = selected.map((asset) => {
-    const role = asset.imageData ? "reference_image" : "text_lock";
-    if (asset.imageData) imageIndex += 1;
-    const number = asset.imageData ? `Image ${imageIndex}` : "无图片";
+    const useImage = Boolean(asset.imageData) && !textOnly;
+    const role = useImage ? "reference_image" : "text_lock";
+    if (useImage) imageIndex += 1;
+    const number = useImage ? `Image ${imageIndex}` : "无图片";
     const base = `${number}（${role}；${ASSET_ROLES[asset.type]} ${asset.id} ${asset.name}）`;
     const parts = [];
     if (asset.desc) parts.push(`外观/空间描述：${asset.desc}`);
@@ -1043,22 +1124,18 @@ function buildPrompt() {
     parts.push("不要把这一个资产的特征扩散到其他人物或场景。");
     return `${base} ${parts.join("；")}`;
   });
-  let effectiveMode = state.settings.mode;
-  if (effectiveMode === "reference" && !selected.some(a => a.imageData)) effectiveMode = "t2v";
+  let effectiveMode = textOnly ? "t2v" : state.settings.mode;
+  if (!textOnly && effectiveMode === "reference" && !selected.some(a => a.imageData)) effectiveMode = "t2v";
   const beats = makeBeats(state.selection, duration);
   const modeLabel = ({ reference:"参考生成", i2v:"首帧图生视频", "first-last":"首尾帧生成", t2v:"文生视频" })[effectiveMode] || "文生视频";
   const refText = refs.length ? refs.join("\n") : "无图片或文字资产锁定；按正文描述生成。";
   const selectedList = selected.map(a => `${a.id} ${a.name}`).join("、") || "无";
-  const relationPrompt = (() => {
-    const ids = new Set(selected.map(a => a.id));
-    const relations = (state.relations || []).filter(rel => ids.has(rel.a) && ids.has(rel.b));
-    if (relations.length) return relations.map(rel => {
-      const a = selected.find(x => x.id === rel.a)?.name || rel.a;
-      const b = selected.find(x => x.id === rel.b)?.name || rel.b;
-      return `${a} ↔ ${b}：${rel.label || "关系待确认"}${rel.note ? `（${rel.note}）` : ""}`;
-    }).join("\n");
-    return "未记录显式关系；按正文称谓、站位、视线和动作推断，不要自行新增亲属关系。";
-  })();
+  const relationsForPrompt = getRelationsForSelected();
+  const relationPrompt = relationsForPrompt.length ? relationsForPrompt.map(rel => {
+    const a = selected.find(x => x.id === rel.a)?.name || rel.a;
+    const b = selected.find(x => x.id === rel.b)?.name || rel.b;
+    return `${a} ↔ ${b}：${rel.label || "关系待确认"}${rel.note ? `（${rel.note}）` : ""}${rel.confidence ? ` [${rel.confidence}]` : ""}`;
+  }).join("\n") : "未记录显式关系；按正文称谓、站位、视线和动作推断，不要自行新增亲属关系。";
   return `MiniMax H3 视频生成提示词
 模式：${modeLabel}
 输出：${duration} 秒；${state.settings.ratio}；${state.settings.resolution}；24 fps；使用原生立体声。
@@ -1486,6 +1563,106 @@ function importAssetPackText(text) {
   }
 }
 
+function apiBase() {
+  return (($("apiBase")?.value || state.settings.apiBase || "http://127.0.0.1:8787").replace(/\/+$/, ""));
+}
+
+async function checkApiHealth() {
+  const base = apiBase();
+  apiStatusInput.value = "检查中…";
+  try {
+    const response = await fetch(`${base}/api/health`, { method: "GET" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "服务不可用");
+    apiStatusInput.value = data.configured ? "已连接，密钥已配置" : "已连接，但未设置 MINIMAX_API_KEY";
+    apiStatusInput.classList.toggle("ok-text", Boolean(data.configured));
+    apiStatusInput.classList.toggle("bad-text", !data.configured);
+    return data;
+  } catch (error) {
+    apiStatusInput.value = `未连接：${error.message || "本地服务未启动"}`;
+    apiStatusInput.classList.add("bad-text");
+    return null;
+  }
+}
+
+function setGenerationStatus(text, kind = "") {
+  generationStatus.textContent = text;
+  generationStatus.className = `model-note ${kind}`;
+}
+
+async function pollH3Job(taskId, base) {
+  try {
+    const response = await fetch(`${base}/api/jobs/${encodeURIComponent(taskId)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "查询任务失败");
+    const job = data.job || {};
+    const status = String(job.status || "unknown");
+    setGenerationStatus(`任务 ${taskId}：${status}`, status === "succeeded" ? "ok-text" : "");
+    if (job.video_url) {
+      generatedVideo.src = `${base}${job.video_url}`;
+      generatedVideo.classList.remove("hidden");
+      generatedVideo.load();
+      setGenerationStatus(`生成完成并已下载：${job.video_path || job.video_url}`, "ok-text");
+      return;
+    }
+    if (["failed", "fail", "cancelled", "canceled"].includes(status.toLowerCase())) {
+      setGenerationStatus(`生成失败：${job.error || status}`, "bad-text");
+      generateH3Btn.disabled = false;
+      return;
+    }
+    setTimeout(() => pollH3Job(taskId, base), 5000);
+  } catch (error) {
+    setGenerationStatus(`查询失败：${error.message}`, "bad-text");
+    setTimeout(() => pollH3Job(taskId, base), 8000);
+  }
+}
+
+async function generateWithH3() {
+  if (!confirmGenerateInput.checked) {
+    setGenerationStatus("请先勾选确认当前镜头。", "bad-text");
+    return;
+  }
+  const prompt = buildPrompt(true);
+  if (!prompt) return;
+  const base = apiBase();
+  generateH3Btn.disabled = true;
+  setGenerationStatus("正在提交 MiniMax H3 任务…", "");
+  try {
+    const response = await fetch(`${base}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        shot_id: state.settings.shotId,
+        duration: Number($("duration").value),
+        resolution: $("resolution").value,
+        ratio: $("ratio").value
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "提交失败");
+    const job = {
+      taskId: data.task_id,
+      shotId: data.shot_id,
+      prompt,
+      duration: Number($("duration").value),
+      resolution: $("resolution").value,
+      ratio: $("ratio").value,
+      status: "submitted",
+      createdAt: new Date().toISOString()
+    };
+    state.generationJobs = state.generationJobs || [];
+    state.generationJobs.unshift(job);
+    persist();
+    setGenerationStatus(`已提交，任务 ${data.task_id}；正在轮询。`, "");
+    confirmGenerateInput.checked = false;
+    pollH3Job(data.task_id, base);
+  } catch (error) {
+    generateH3Btn.disabled = false;
+    setGenerationStatus(`提交失败：${error.message}`, "bad-text");
+  }
+}
+
 function exportProject() {
   collectSettings();
   const payload = JSON.stringify(state, null, 2);
@@ -1505,6 +1682,7 @@ function importProject(file) {
       if (!state.history) state.history = [];
       if (!state.settings) state.settings = defaultState().settings;
       if (!Array.isArray(state.relations)) state.relations = [];
+      if (!Array.isArray(state.generationJobs)) state.generationJobs = [];
       if (!state.lastAdaptation) state.lastAdaptation = null;
       initForm(); novelText.value = state.novelText || ""; renderSelection(); renderAssets(); renderRelationships(); renderAdaptation(); renderHistory(); updateTextMeta(); persist();
       toast("项目已导入");
@@ -1533,6 +1711,9 @@ function bind() {
   $("fitSelectionBtn").addEventListener("click", () => { captureSelection(false); suggestShotFromSelection(); toast("已用选区填充镜头字段"); });
   $("autoBreakdownBtn").addEventListener("click", autoBreakdown);
   $("copyAdaptationBtn").addEventListener("click", copyAdaptation);
+  $("checkApiBtn").addEventListener("click", checkApiHealth);
+  $("generateH3Btn").addEventListener("click", generateWithH3);
+  confirmGenerateInput.addEventListener("change", () => { generateH3Btn.disabled = !confirmGenerateInput.checked; });
   $("selectMatchedBtn").addEventListener("click", () => { autoMatchAssets(); renderAssets(); persist(); });
   $("generateBtn").addEventListener("click", generate);
   $("copyPromptBtn").addEventListener("click", () => {
