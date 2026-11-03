@@ -1,0 +1,994 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MiniMax H3 小说选区分镜工作台</title>
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #121416;
+  --panel: #1a1e21;
+  --panel-2: #20262a;
+  --panel-3: #272e33;
+  --line: #343d43;
+  --text: #edf1ef;
+  --muted: #9aa7a1;
+  --accent: #f0a45b;
+  --accent-2: #8fd0c4;
+  --danger: #ff8d85;
+  --ok: #8bd49b;
+  --shadow: 0 18px 50px rgba(0,0,0,.28);
+  --radius: 16px;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(1200px 500px at 15% -10%, rgba(143,208,196,.12), transparent 60%),
+    radial-gradient(900px 500px at 95% 15%, rgba(240,164,91,.10), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+}
+button, input, textarea, select { font: inherit; }
+button { cursor: pointer; }
+.app-header {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;
+  padding: 26px 30px 20px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(18,20,22,.78); backdrop-filter: blur(16px);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand-kicker { color: var(--accent); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+h1 { margin: 6px 0 0; font-size: clamp(22px, 3vw, 34px); line-height: 1.12; letter-spacing: -.03em; }
+.subtitle { color: var(--muted); font-size: 13px; margin-top: 7px; }
+.header-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.workspace {
+  display: grid; grid-template-columns: minmax(360px, 1.12fr) minmax(330px, .88fr) minmax(420px, 1.28fr);
+  gap: 16px; padding: 16px; align-items: start;
+}
+.panel {
+  border: 1px solid var(--line); border-radius: var(--radius); background: rgba(26,30,33,.92);
+  box-shadow: var(--shadow); min-width: 0; overflow: hidden;
+}
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 15px 16px; border-bottom: 1px solid var(--line); }
+.panel-title { font-weight: 700; font-size: 14px; letter-spacing: .02em; }
+.panel-subtitle { color: var(--muted); font-size: 12px; margin-top: 3px; }
+.panel-body { padding: 14px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 34px; padding: 8px 12px; border-radius: 10px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  transition: border-color .15s, background .15s, transform .15s;
+}
+.btn:hover { border-color: #52616a; background: var(--panel-3); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: #23180e; border-color: var(--accent); font-weight: 700; }
+.btn-primary:hover { background: #ffb875; border-color: #ffb875; }
+.btn-quiet { background: transparent; }
+.btn-danger { color: var(--danger); }
+.btn-small { min-height: 29px; padding: 5px 9px; border-radius: 8px; font-size: 12px; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.field-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.field label { color: var(--muted); font-size: 11px; letter-spacing: .03em; }
+.field input, .field select, .field textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 9px;
+  background: #15191c; color: var(--text); padding: 8px 9px; outline: none;
+}
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent-2); box-shadow: 0 0 0 2px rgba(143,208,196,.12); }
+.field textarea { resize: vertical; min-height: 68px; line-height: 1.5; }
+.field-span-2 { grid-column: span 2; }
+.field-span-3 { grid-column: span 3; }
+.novel-input {
+  width: 100%; min-height: 520px; resize: vertical; padding: 14px;
+  border: 1px solid var(--line); border-radius: 12px; background: #14181b; color: #dfe7e2;
+  line-height: 1.8; font-family: "Songti SC", "Noto Serif CJK SC", "STSong", serif; font-size: 15px;
+}
+.selection-card {
+  margin-top: 10px; border: 1px solid rgba(240,164,91,.32); background: rgba(240,164,91,.075);
+  border-radius: 12px; padding: 11px 12px;
+}
+.selection-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 7px; }
+.selection-head strong { color: var(--accent); font-size: 12px; }
+.selection-text { color: #e4ddd3; font-size: 13px; line-height: 1.65; white-space: pre-wrap; max-height: 140px; overflow: auto; }
+.char-count { color: var(--muted); font-size: 11px; }
+.tabs { display: flex; gap: 6px; padding: 0 14px 12px; }
+.tab {
+  border: 1px solid var(--line); background: transparent; color: var(--muted);
+  border-radius: 999px; padding: 6px 10px; font-size: 12px;
+}
+.tab.active { color: #1c1710; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+.asset-list { display: grid; gap: 9px; max-height: 590px; overflow: auto; padding-right: 3px; }
+.asset-card {
+  display: grid; grid-template-columns: 44px 1fr auto; gap: 10px; align-items: start;
+  min-width: 0; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: #171c1f;
+}
+.asset-card.selected { border-color: rgba(143,208,196,.72); background: rgba(143,208,196,.075); }
+.asset-check { margin-top: 3px; accent-color: var(--accent-2); }
+.thumb {
+  width: 44px; height: 54px; border-radius: 8px; background: linear-gradient(135deg, #303940, #1e2428);
+  border: 1px solid #3a454c; display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: 10px;
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.asset-name { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.asset-id { color: var(--accent); font-size: 10px; letter-spacing: .07em; }
+.asset-desc { color: var(--muted); font-size: 11px; line-height: 1.45; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.asset-actions { display: flex; gap: 5px; }
+.icon-btn { border: 0; background: transparent; color: var(--muted); font-size: 12px; padding: 3px; }
+.icon-btn:hover { color: var(--text); }
+.asset-empty { border: 1px dashed var(--line); border-radius: 12px; padding: 28px 18px; text-align: center; color: var(--muted); font-size: 13px; }
+.status-list { display: grid; gap: 7px; margin-top: 10px; }
+.status-item { font-size: 12px; line-height: 1.45; color: var(--muted); padding-left: 16px; position: relative; }
+.status-item::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent-2); position: absolute; left: 2px; top: 7px; }
+.status-item.warn::before { background: var(--accent); }
+.status-item.bad { color: #f2b7b2; }
+.status-item.bad::before { background: var(--danger); }
+.hr { height: 1px; background: var(--line); margin: 14px 0; }
+.prompt-output {
+  min-height: 270px; max-height: 520px; overflow: auto; white-space: pre-wrap;
+  border: 1px solid var(--line); border-radius: 12px; background: #111518; padding: 13px; line-height: 1.62;
+  color: #e7efeb; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px;
+}
+.prompt-meta { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 11px; margin-bottom: 8px; }
+.warn-text { color: var(--accent); }
+.bad-text { color: var(--danger); }
+.ok-text { color: var(--ok); }
+.history-list { display: grid; gap: 8px; max-height: 230px; overflow: auto; }
+.history-item { border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; background: #171c1f; }
+.history-top { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+.history-excerpt { color: #d9e1dd; font-size: 12px; line-height: 1.45; margin-top: 4px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+dialog {
+  width: min(660px, calc(100vw - 30px)); max-height: 90vh; overflow: auto; color: var(--text);
+  border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: 0 24px 90px rgba(0,0,0,.55); padding: 0;
+}
+dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--line); }
+.dialog-body { padding: 16px 18px; }
+.dialog-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--line); }
+.image-preview { width: 100%; height: 150px; border-radius: 12px; border: 1px dashed var(--line); margin-top: 7px; display: grid; place-items: center; color: var(--muted); background: #15191c; overflow: hidden; }
+.image-preview img { width: 100%; height: 100%; object-fit: contain; }
+.toast {
+  position: fixed; right: 20px; bottom: 20px; z-index: 50; padding: 10px 14px; border-radius: 10px;
+  background: #e8f3ee; color: #13211b; box-shadow: 0 10px 30px rgba(0,0,0,.35); font-size: 13px;
+  transform: translateY(10px); opacity: 0; pointer-events: none; transition: .2s ease;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.hidden { display: none !important; }
+.model-note { color: var(--muted); font-size: 11px; line-height: 1.55; }
+.model-note a { color: var(--accent-2); text-decoration: none; }
+@media (max-width: 1180px) {
+  .workspace { grid-template-columns: 1fr 1fr; }
+  .builder-panel { grid-column: 1 / -1; }
+}
+@media (max-width: 760px) {
+  .app-header { align-items: flex-start; flex-direction: column; padding: 18px; }
+  .workspace { grid-template-columns: 1fr; padding: 10px; }
+  .builder-panel { grid-column: auto; }
+  .field-grid, .field-grid.three { grid-template-columns: 1fr; }
+  .field-span-2, .field-span-3 { grid-column: auto; }
+  .novel-input { min-height: 380px; }
+}
+</style>
+</head>
+<body>
+<header class="app-header">
+  <div>
+    <div class="brand-kicker">MiniMax H3 · Novel to Shot Prompt</div>
+    <h1>小说选区分镜工作台</h1>
+    <div class="subtitle">导入小说、框选一段、锁定人物与场景一致性，生成可粘贴的 H3 视频提示词。</div>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-small" id="sampleBtn">载入示例</button>
+    <button class="btn btn-small" id="exportProjectBtn">导出项目 JSON</button>
+    <label class="btn btn-small" for="importProjectInput">导入项目 JSON</label>
+    <input class="hidden" type="file" id="importProjectInput" accept=".json,application/json">
+    <button class="btn btn-small btn-danger" id="clearBtn">清空</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">01 · 小说文本</div>
+        <div class="panel-subtitle" id="textMeta">粘贴或导入 .txt / .md 文件</div>
+      </div>
+      <label class="btn btn-small" for="textFileInput">导入文本</label>
+      <input class="hidden" type="file" id="textFileInput" accept=".txt,.md,.markdown,text/plain,text/markdown">
+    </div>
+    <div class="panel-body">
+      <textarea class="novel-input" id="novelText" spellcheck="false" placeholder="粘贴小说或剧本文本，然后在文本中用鼠标选中要改编的区域。"></textarea>
+      <div class="selection-card">
+        <div class="selection-head">
+          <strong>当前选区</strong>
+          <span class="char-count" id="selectionCount">0 字</span>
+        </div>
+        <div class="selection-text" id="selectionText">还没有选中文本。选中一段后，工具会自动匹配人物、场景和道具。</div>
+      </div>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn btn-small" id="captureSelectionBtn">捕获当前选区</button>
+        <button class="btn btn-small btn-quiet" id="fitSelectionBtn">用选区填充镜头</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">02 · 一致性资产</div>
+        <div class="panel-subtitle">图片可以导入；没有图片时用文字锁定人物和背景</div>
+      </div>
+      <button class="btn btn-small" id="addAssetBtn">添加资产</button>
+    </div>
+    <div class="panel-body">
+      <div class="tabs" id="assetTabs"></div>
+      <div class="asset-list" id="assetList"></div>
+      <div class="hr"></div>
+      <div class="toolbar">
+        <button class="btn btn-small" id="copyDescriptionRequestBtn">复制描述补全请求</button>
+        <button class="btn btn-small btn-quiet" id="selectMatchedBtn">自动匹配选区</button>
+      </div>
+      <div class="status-list" id="consistencyStatus"></div>
+    </div>
+  </section>
+
+  <section class="panel builder-panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">03 · 单镜提示词</div>
+        <div class="panel-subtitle">MiniMax-H3：4–15 秒整数时长，768P / 2K，参考图最多 9 张</div>
+      </div>
+      <button class="btn btn-small btn-primary" id="generateBtn">生成 H3 提示词</button>
+    </div>
+    <div class="panel-body">
+      <div class="field" style="margin-bottom:10px"><label for="projectName">项目名</label><input id="projectName" placeholder="例如：门外的第二份外卖"></div>
+      <div class="field-grid three">
+        <div class="field"><label for="shotId">镜号</label><input id="shotId" value="S01-01"></div>
+        <div class="field"><label for="duration">时长（秒）</label><select id="duration"></select></div>
+        <div class="field"><label for="resolution">分辨率</label><select id="resolution"><option>768P</option><option selected>2K</option></select></div>
+        <div class="field"><label for="ratio">画幅</label><select id="ratio"><option selected>9:16</option><option>16:9</option><option>1:1</option><option>4:3</option><option>adaptive</option></select></div>
+        <div class="field"><label for="mode">生成模式</label><select id="mode"><option value="reference">参考生成</option><option value="i2v">首帧图生视频</option><option value="first-last">首尾帧</option><option value="t2v">文生视频</option></select></div>
+        <div class="field"><label for="camera">运镜</label><input id="camera" value="[static]" placeholder="例如 [static]、[zoom]、[pan]"></div>
+      </div>
+      <div class="field-grid three" style="margin-top:10px">
+        <div class="field"><label for="shotSize">景别</label><select id="shotSize"><option>大远景</option><option>远景</option><option>全景</option><option selected>中景</option><option>中近景</option><option>近景</option><option>特写</option><option>大特写</option></select></div>
+        <div class="field"><label for="angle">角度 / 机位</label><input id="angle" value="平视，固定机位"></div>
+        <div class="field"><label for="lens">焦段</label><input id="lens" value="50mm 等效焦段"></div>
+      </div>
+      <div class="field" style="margin-top:10px"><label for="objective">镜头目的</label><input id="objective" placeholder="例如：让观众发现订单号异常，并把情绪推到僵住。"></div>
+      <div class="field" style="margin-top:10px"><label for="action">动作 / 对白节拍</label><textarea id="action" placeholder="从选区自动填入，可继续改成可拍动作。"></textarea></div>
+      <div class="field" style="margin-top:10px"><label for="ending">结束状态 / 剪辑点</label><textarea id="ending" placeholder="例如：林夏的手停在半空；门外再次敲门，切黑。"></textarea></div>
+      <div class="field-grid" style="margin-top:10px">
+        <div class="field"><label for="style">Style Lock</label><textarea id="style"></textarea></div>
+        <div class="field"><label for="lighting">光影 / 色彩</label><textarea id="lighting"></textarea></div>
+        <div class="field"><label for="audio">声音</label><textarea id="audio"></textarea></div>
+        <div class="field"><label for="performance">表演 / 情绪</label><textarea id="performance"></textarea></div>
+        <div class="field field-span-2"><label for="negative">禁止项 / 编辑边界</label><textarea id="negative"></textarea></div>
+      </div>
+
+      <div class="hr"></div>
+      <div class="prompt-meta">
+        <span id="promptStatus">尚未生成</span>
+        <span id="promptLength">0 / 7000 字符</span>
+      </div>
+      <pre class="prompt-output" id="promptOutput">选中小说的某个区域，确认人物/场景卡，然后点击“生成 H3 提示词”。</pre>
+      <div class="toolbar" style="margin-top:10px">
+        <button class="btn btn-primary" id="copyPromptBtn">复制 H3 提示词</button>
+        <button class="btn btn-small" id="downloadPromptBtn">下载 Markdown</button>
+      </div>
+      <div class="model-note" style="margin-top:12px">
+        H3 官方提示词上限 7000 字符；参考输入图片 ≤9、视频 ≤3、音频 ≤3，混合文件 ≤12。规格会随产品版本变化，生成前请核对当前入口。
+        <a href="https://platform.minimax.io/docs/guides/video-generation.md" target="_blank" rel="noreferrer">官方视频生成文档</a>
+      </div>
+
+      <div class="hr"></div>
+      <div class="panel-title" style="font-size:12px;margin-bottom:8px">版本记录</div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+  </section>
+</main>
+
+<dialog id="assetDialog">
+  <form method="dialog" id="assetForm">
+    <div class="dialog-head">
+      <div>
+        <div class="panel-title" id="assetDialogTitle">添加资产</div>
+        <div class="panel-subtitle">图片和文字至少填写一项；两者都有时一致性更强</div>
+      </div>
+      <button class="btn btn-small" id="closeAssetDialog" type="button">关闭</button>
+    </div>
+    <div class="dialog-body">
+      <input type="hidden" id="assetEditId">
+      <div class="field-grid">
+        <div class="field"><label for="assetType">类型</label><select id="assetType"><option value="character">人物</option><option value="scene">场景/背景</option><option value="prop">道具</option></select></div>
+        <div class="field"><label for="assetName">名称</label><input id="assetName" required placeholder="例如：林夏"></div>
+        <div class="field field-span-2"><label for="assetAliases">别名（英文逗号分隔）</label><input id="assetAliases" placeholder="例如：女主, 林夏"></div>
+        <div class="field field-span-2"><label for="assetDesc">描述</label><textarea id="assetDesc" placeholder="年龄感、身份、外观、空间、材质等。"></textarea></div>
+        <div class="field field-span-2"><label for="assetLock">一致性锁</label><textarea id="assetLock" placeholder="每个镜头都必须保持的特征；不参考什么也要写清。"></textarea></div>
+        <div class="field field-span-2">
+          <label for="assetImage">参考图片</label>
+          <input type="file" id="assetImage" accept="image/png,image/jpeg,image/webp,image/heic,image/heif">
+          <div class="image-preview" id="assetImagePreview">尚未导入图片</div>
+          <button class="btn btn-small btn-quiet" type="button" id="removeAssetImage">移除图片</button>
+        </div>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-small" type="button" id="deleteAssetBtn">删除</button>
+      <button class="btn btn-primary" type="submit" id="saveAssetBtn">保存资产</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = "minimax-h3-storyboard-workbench-v1";
+const ASSET_LABELS = { character: "人物", scene: "场景/背景", prop: "道具" };
+const ASSET_ROLES = { character: "角色", scene: "场景", prop: "道具" };
+
+const sampleText = `暴雨把窗户敲得发白。林夏提着垃圾走到门口，手机忽然震了一下。
+外卖备注只有一句话：小满，青提少冰。放门口，别回头。
+她僵在原地。这是姐姐林秋失踪前，只有她们两人知道的暗号。
+门外传来塑料袋摩擦的声音。猫眼里，一个穿黄色外卖马甲的男人低着头，雨水顺着帽檐往下滴。
+“林夏，外卖。”他隔着门说。
+“单号多少？”
+“7319。”
+林夏低头看手机。订单号也是 7319。
+她解开门链，把陈默放了进来。男人进门后没有脱鞋，蓝色保温袋在地垫上积出一小滩水。
+“你认识林秋吗？”
+陈默停了一下：“不认识。”
+就在这时，手机屏幕亮起：订单 7319 已送达。
+可陈默已经站在她身后。
+门外又响起了三下敲门声。`;
+
+const sampleAssets = [
+  { id: "C01", type: "character", name: "林夏", aliases: ["林夏"], desc: "28 岁，独居女性，谨慎、警觉，三年前姐姐林秋失踪。", lock: "低马尾；灰色宽松针织衫；黑色手机在右手；手机壳有白色磨痕；不换装。", imageName: "", imageData: "" },
+  { id: "C02", type: "character", name: "陈默", aliases: ["陈默", "外卖员"], desc: "25 岁，外卖员，黑色短发，雨衣外穿黄色外卖马甲，疲惫且回避冲突。", lock: "黑色湿发；深色雨衣；黄色外卖马甲；左手蓝色保温袋；右手纸质小票；鞋底和袋底滴水。", imageName: "", imageData: "" },
+  { id: "S01", type: "scene", name: "公寓客厅门区", aliases: ["客厅", "门口", "公寓"], desc: "旧合租公寓，门在画面左侧，沙发和旧台灯在右侧，餐桌在前景下方。", lock: "门在画面左侧；旧台灯右后方暖光；门链位置不变；走廊绿光只从门缝进入。", imageName: "", imageData: "" },
+  { id: "S02", type: "scene", name: "公共走廊", aliases: ["走廊", "门外"], desc: "公寓公共走廊，绿色顶部荧光灯，电梯在门左后方，地面有反光水迹。", lock: "绿色顶部荧光；电梯在门左后方；雨夜水迹；背景不能出现额外人物。", imageName: "", imageData: "" },
+  { id: "P01", type: "prop", name: "黑色手机", aliases: ["手机"], desc: "林夏右手持有的黑色手机，手机壳有一道白色磨痕。", lock: "黑色手机；白色磨痕；始终在右手；屏幕内容后期合成。", imageName: "", imageData: "" },
+  { id: "P02", type: "prop", name: "订单小票", aliases: ["小票", "订单"], desc: "被雨打湿的纸质小票，正面订单号 7319，背面后段才出现手写字。", lock: "纸质湿润边缘；订单号 7319；背面文字只能在最后镜头出现。", imageName: "", imageData: "" },
+  { id: "P03", type: "prop", name: "蓝色保温袋", aliases: ["保温袋", "外卖袋"], desc: "陈默左手提着的蓝色外卖保温袋，持续滴水。", lock: "蓝色；由陈默左手持有；袋底持续滴水；不能凭空消失。", imageName: "", imageData: "" }
+];
+
+function defaultState() {
+  return {
+    version: 1,
+    projectName: "门外的第二份外卖",
+    novelText: sampleText,
+    selection: "",
+    activeAssetTab: "character",
+    selectedAssetIds: [],
+    assets: sampleAssets.map(a => ({ ...a })),
+    settings: {
+      shotId: "S01-01",
+      duration: 8,
+      resolution: "2K",
+      ratio: "9:16",
+      mode: "reference",
+      camera: "[static]",
+      shotSize: "中景",
+      angle: "平视，固定机位",
+      lens: "50mm 等效焦段",
+      objective: "",
+      action: "",
+      ending: "",
+      style: "冷湿都市悬疑；低饱和蓝灰主色；走廊荧光绿；室内旧台灯暖黄；中高对比但保留暗部细节；真实自然肤色。",
+      lighting: "室内旧台灯从右后方提供暖光；手机冷光补脸；走廊绿光从门缝进入；雨夜反光。",
+      audio: "雨声、电梯声、手机震动、门链和敲门声；对白克制；不生成音乐。",
+      performance: "克制、警觉；用呼吸、停顿和视线反应推进，不做夸张表情。",
+      negative: "不要新增人物；不要换装；不要真实外卖平台 Logo；不要生成可读字幕；不要血腥；不要鬼影；不要改变门、门链或人物左右位置。"
+    },
+    history: [],
+    lastPrompt: ""
+  };
+}
+
+let state = loadState() || defaultState();
+let selectedImageData = "";
+let selectedImageName = "";
+
+const $ = (id) => document.getElementById(id);
+const novelText = $("novelText");
+const selectionText = $("selectionText");
+const selectionCount = $("selectionCount");
+const assetList = $("assetList");
+const assetTabs = $("assetTabs");
+const consistencyStatus = $("consistencyStatus");
+const promptOutput = $("promptOutput");
+const promptLength = $("promptLength");
+const promptStatus = $("promptStatus");
+const historyList = $("historyList");
+
+function escapeHTML(value = "") {
+  return String(value).replace(/[&<>"']/g, ch => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[ch]));
+}
+
+function uid(prefix) {
+  return `${prefix}${Date.now().toString(36).slice(-5)}${Math.random().toString(36).slice(2,5).toUpperCase()}`;
+}
+
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+function persist() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (error) {
+    console.warn("autosave failed", error);
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.version !== 1 || !Array.isArray(parsed.assets)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function initForm() {
+  $("projectName").value = state.projectName || "未命名项目";
+  const duration = $("duration");
+  duration.innerHTML = "";
+  for (let i = 4; i <= 15; i++) duration.add(new Option(`${i} 秒`, String(i)));
+  duration.value = String(state.settings.duration || 8);
+  ["resolution","ratio","mode","camera","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"].forEach(key => {
+    const el = $(key);
+    if (el && state.settings[key] !== undefined) el.value = state.settings[key];
+  });
+  $("shotId").value = state.settings.shotId || "S01-01";
+}
+
+function collectSettings() {
+  state.projectName = $("projectName").value.trim() || "未命名项目";
+  const keys = ["shotId","resolution","ratio","mode","camera","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"];
+  keys.forEach(key => state.settings[key] = $(key).value);
+  state.settings.duration = Number($("duration").value);
+  persist();
+}
+
+function selectedAssets() {
+  const ids = new Set(state.selectedAssetIds);
+  return state.assets.filter(a => ids.has(a.id));
+}
+
+function renderAssetTabs() {
+  assetTabs.innerHTML = "";
+  ["character","scene","prop"].forEach(type => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `tab ${state.activeAssetTab === type ? "active" : ""}`;
+    const count = state.assets.filter(a => a.type === type).length;
+    btn.textContent = `${ASSET_LABELS[type]} ${count}`;
+    btn.addEventListener("click", () => {
+      state.activeAssetTab = type;
+      persist();
+      renderAssets();
+    });
+    assetTabs.appendChild(btn);
+  });
+}
+
+function renderAssets() {
+  renderAssetTabs();
+  const list = state.assets.filter(a => a.type === state.activeAssetTab);
+  assetList.innerHTML = "";
+  if (!list.length) {
+    assetList.innerHTML = `<div class="asset-empty">还没有${ASSET_LABELS[state.activeAssetTab]}资产。点击“添加资产”创建。</div>`;
+    renderConsistency();
+    return;
+  }
+  list.forEach(asset => {
+    const checked = state.selectedAssetIds.includes(asset.id);
+    const card = document.createElement("article");
+    card.className = `asset-card ${checked ? "selected" : ""}`;
+    card.dataset.id = asset.id;
+    card.innerHTML = `
+      <input class="asset-check" type="checkbox" ${checked ? "checked" : ""} aria-label="选择${escapeHTML(asset.name)}">
+      <div class="thumb">${asset.imageData ? `<img src="${escapeHTML(asset.imageData)}" alt="${escapeHTML(asset.name)} 参考图">` : escapeHTML(ASSET_LABELS[asset.type])}</div>
+      <div style="min-width:0">
+        <div class="asset-name"><span class="asset-id">${escapeHTML(asset.id)}</span>${escapeHTML(asset.name)}</div>
+        <div class="asset-desc">${escapeHTML(asset.desc || asset.lock || "尚未填写描述")}</div>
+        <div class="asset-actions">
+          <button class="icon-btn" type="button" data-edit="${escapeHTML(asset.id)}">编辑</button>
+          <button class="icon-btn" type="button" data-copy="${escapeHTML(asset.id)}">复制描述</button>
+        </div>
+      </div>
+    `;
+    card.querySelector(".asset-check").addEventListener("change", (e) => {
+      if (e.target.checked && !state.selectedAssetIds.includes(asset.id)) state.selectedAssetIds.push(asset.id);
+      if (!e.target.checked) state.selectedAssetIds = state.selectedAssetIds.filter(id => id !== asset.id);
+      persist(); renderAssets(); updateConsistencyStatus();
+    });
+    card.querySelector("[data-edit]").addEventListener("click", () => openAssetDialog(asset));
+    card.querySelector("[data-copy]").addEventListener("click", () => copyText(assetToText(asset), "资产描述已复制"));
+    assetList.appendChild(card);
+  });
+  renderConsistency();
+}
+
+function assetToText(asset) {
+  return `${asset.id}｜${asset.name}（${ASSET_LABELS[asset.type]}）\n描述：${asset.desc || "未填写"}\n一致性锁：${asset.lock || "未填写"}\n参考图：${asset.imageName || "未导入"}`;
+}
+
+function renderSelection() {
+  selectionText.textContent = state.selection || "还没有选中文本。选中一段后，工具会自动匹配人物、场景和道具。";
+  selectionCount.textContent = `${state.selection.length} 字`;
+}
+
+function captureSelection(notify = true) {
+  const start = novelText.selectionStart;
+  const end = novelText.selectionEnd;
+  const text = novelText.value.slice(start, end).trim();
+  if (!text) {
+    if (notify) toast("请先在小说文本中选中一段文字");
+    return;
+  }
+  state.selection = text;
+  autoMatchAssets();
+  renderSelection();
+  renderAssets();
+  persist();
+  toast(`已捕获 ${text.length} 字`);
+}
+
+function autoMatchAssets() {
+  if (!state.selection) return;
+  const text = state.selection.toLowerCase();
+  const matched = state.assets.filter(asset => {
+    const tokens = [asset.name, ...(asset.aliases || [])].filter(Boolean).map(x => String(x).toLowerCase());
+    return tokens.some(token => token.length >= 1 && text.includes(token));
+  });
+  state.selectedAssetIds = matched.map(a => a.id);
+}
+
+function copyText(text, message = "已复制") {
+  const done = () => toast(message);
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+  } else {
+    fallbackCopy(text, done);
+  }
+}
+
+function fallbackCopy(text, done) {
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch { toast("复制失败，请手动选择文本"); }
+  ta.remove();
+}
+
+function renderConsistency() {
+  const selected = selectedAssets();
+  const issues = [];
+  if (!state.selection) issues.push(["warn", "尚未选中小说区域"]);
+  if (!selected.length) issues.push(["warn", "尚未选择人物/场景/道具"]);
+  selected.forEach(asset => {
+    if (!asset.desc && !asset.lock && !asset.imageData) issues.push(["bad", `${asset.id} ${asset.name} 没有图片或文字描述`]);
+  });
+  const imageCount = selected.filter(a => a.imageData).length;
+  if (imageCount > 9) issues.push(["bad", `本次参考图 ${imageCount} 张，超过 H3 的 9 张上限`]);
+  if (selected.length > 12) issues.push(["bad", `本次资产 ${selected.length} 个，可能超过 H3 混合输入上限`]);
+  if (!selected.some(a => a.type === "character") && state.selection) issues.push(["warn", "选区没有匹配到人物，请手动选择角色"]);
+  if (!selected.some(a => a.type === "scene") && state.selection) issues.push(["warn", "选区没有匹配到场景，请手动选择背景"]);
+  const tokenMap = new Map();
+  state.assets.forEach(asset => {
+    const tokens = [asset.name, ...(asset.aliases || [])].filter(Boolean).map(x => String(x).toLowerCase());
+    [...new Set(tokens)].forEach(token => {
+      if (token.length < 2) return;
+      if (!tokenMap.has(token)) tokenMap.set(token, new Set());
+      tokenMap.get(token).add(asset.id);
+    });
+  });
+  [...tokenMap.entries()].filter(([, ids]) => ids.size > 1).slice(0, 3).forEach(([token, ids]) => {
+    issues.push(["bad", `别名「${token}」同时属于 ${[...ids].join("、")}，自动匹配会冲突`]);
+  });
+  if (!issues.length) issues.push(["", "一致性资产已就绪"]);
+  consistencyStatus.innerHTML = issues.map(([cls, text]) => `<div class="status-item ${cls}">${escapeHTML(text)}</div>`).join("");
+}
+
+function updateConsistencyStatus() {
+  renderConsistency();
+}
+
+function addToastIfNeeded() {}
+
+function suggestShotFromSelection() {
+  const text = state.selection || novelText.value.slice(0, 120);
+  if (!text) return;
+  const dialogue = /[“”「」『』]/.test(text) || /(说|问|喊|答)/.test(text);
+  const action = /(跑|冲|推|拉|拿|走|转身|打开|关|举|放|翻|敲)/.test(text);
+  const reaction = /(发现|看到|愣|僵|停|呼吸|眼睛|表情|身后)/.test(text);
+  const length = text.length;
+  state.settings.duration = length < 35 ? 4 : length < 70 ? 6 : length < 110 ? 8 : length < 170 ? 10 : 12;
+  state.settings.shotSize = reaction ? "近景" : dialogue ? "中近景" : action ? "中景" : "全景";
+  state.settings.camera = reaction ? "[zoom]" : dialogue ? "[static]" : action ? "[pan]" : "[static]";
+  state.settings.objective = state.settings.objective || "把选区中的关键信息转成一个可连续生成的镜头，结尾停在新的疑问或情绪变化上。";
+  const sentences = splitSentences(text);
+  state.settings.action = state.settings.action || sentences.slice(0, 3).join("\n");
+  state.settings.ending = state.settings.ending || (sentences.at(-1) || text);
+  $("duration").value = String(state.settings.duration);
+  ["shotSize","camera","objective","action","ending"].forEach(k => { $(k).value = state.settings[k]; });
+  persist();
+}
+
+function splitSentences(text) {
+  return (text || "").split(/(?<=[。！？!?；;])|\n+/).map(s => s.trim()).filter(Boolean);
+}
+
+function makeBeats(text, duration) {
+  const sentences = splitSentences(text);
+  if (!sentences.length) return `0–${duration} 秒：按镜头设计完成主要动作，结尾停在下述结束状态。`;
+  const count = Math.min(3, sentences.length);
+  const chunk = Math.ceil(sentences.length / count);
+  const groups = [];
+  for (let i = 0; i < sentences.length; i += chunk) groups.push(sentences.slice(i, i + chunk).join(""));
+  const slots = groups.slice(0, 3);
+  let cursor = 0;
+  return slots.map((group, i) => {
+    const remaining = duration - cursor;
+    const left = slots.length - i;
+    const span = i === slots.length - 1 ? remaining : Math.max(1, Math.round(remaining / left));
+    const start = cursor;
+    cursor = Math.min(duration, cursor + span);
+    return `${start}–${cursor} 秒：${group}`;
+  }).join("\n");
+}
+
+function buildPrompt() {
+  collectSettings();
+  if (!state.selection.trim()) {
+    toast("请先选中小说的一个区域");
+    return null;
+  }
+  const selected = selectedAssets();
+  const duration = Math.max(4, Math.min(15, Number(state.settings.duration) || 8));
+  let imageIndex = 0;
+  const refs = selected.map((asset) => {
+    const role = asset.imageData ? "reference_image" : "text_lock";
+    if (asset.imageData) imageIndex += 1;
+    const number = asset.imageData ? `Image ${imageIndex}` : "无图片";
+    const base = `${number}（${role}；${ASSET_ROLES[asset.type]} ${asset.id} ${asset.name}）`;
+    const parts = [];
+    if (asset.desc) parts.push(`外观/空间描述：${asset.desc}`);
+    if (asset.lock) parts.push(`必须保持：${asset.lock}`);
+    if (asset.imageName) parts.push(`参考文件名：${asset.imageName}`);
+    parts.push("不要把这一个资产的特征扩散到其他人物或场景。");
+    return `${base} ${parts.join("；")}`;
+  });
+  let effectiveMode = state.settings.mode;
+  if (effectiveMode === "reference" && !selected.some(a => a.imageData)) effectiveMode = "t2v";
+  const beats = makeBeats(state.selection, duration);
+  const modeLabel = ({ reference:"参考生成", i2v:"首帧图生视频", "first-last":"首尾帧生成", t2v:"文生视频" })[effectiveMode] || "文生视频";
+  const refText = refs.length ? refs.join("\n") : "无图片或文字资产锁定；按正文描述生成。";
+  const selectedList = selected.map(a => `${a.id} ${a.name}`).join("、") || "无";
+  return `MiniMax H3 视频生成提示词
+模式：${modeLabel}
+输出：${duration} 秒；${state.settings.ratio}；${state.settings.resolution}；24 fps；使用原生立体声。
+项目：${state.projectName || "未命名项目"}｜镜号：${state.settings.shotId}
+
+参考素材：
+${refText}
+
+选区原文：
+「${state.selection}」
+
+镜头目的：
+${state.settings.objective || "将选区中的关键信息转成一个可连续生成的镜头，结尾停在新问题或情绪变化上。"}
+
+镜头设计：
+景别：${state.settings.shotSize}
+机位与角度：${state.settings.angle}
+焦段与景深：${state.settings.lens}
+构图：竖屏中保留门框/人物/关键道具的叙事关系；主体不要被裁切；为字幕和平台 UI 预留空白。
+摄影机：${state.settings.camera}，运动必须有明确起幅和落幅，不额外加入未声明的绕拍、甩镜或快速变焦。
+
+时间节拍：
+${beats}
+
+结束状态：
+${state.settings.ending || "停在动作完成后的反应或新的悬念上。"}
+
+视觉风格：
+${state.settings.style}
+
+光影与色彩：
+${state.settings.lighting}
+
+表演与情绪：
+${state.settings.performance}
+
+声音：
+${state.settings.audio}
+
+连续性：
+本次锁定资产：${selectedList}。
+人物身份、脸、发型、服装、配饰、左右手、道具、场景布局、光源方向、色温和声音空间必须与参考素材或文字锁定一致。
+
+禁止项：
+${state.settings.negative}
+
+编辑边界：
+只生成上述选区对应的单个镜头；不要擅自增加下一场、下一集或未声明的人物。屏幕文字、真实平台 Logo 和精确可读中文交给后期；如果模型无法稳定生成，优先拆镜或后期合成。`;
+}
+
+function generate() {
+  const prompt = buildPrompt();
+  if (!prompt) return;
+  state.lastPrompt = prompt;
+  promptOutput.textContent = prompt;
+  promptLength.textContent = `${prompt.length} / 7000 字符`;
+  promptStatus.textContent = prompt.length > 7000 ? "超过官方提示词上限，需要压缩" : "已生成草案";
+  promptStatus.className = prompt.length > 7000 ? "bad-text" : "ok-text";
+  state.history.unshift({
+    id: uid("H"),
+    time: new Date().toISOString(),
+    shotId: state.settings.shotId,
+    excerpt: state.selection.slice(0, 120),
+    prompt,
+    selectedIds: [...state.selectedAssetIds],
+    settings: { ...state.settings }
+  });
+  state.history = state.history.slice(0, 10);
+  persist();
+  renderHistory();
+}
+
+function renderHistory() {
+  historyList.innerHTML = "";
+  if (!state.history.length) {
+    historyList.innerHTML = `<div class="asset-empty" style="padding:16px">生成提示词后会记录版本，方便对比和回退。</div>`;
+    return;
+  }
+  state.history.forEach(item => {
+    const row = document.createElement("div");
+    row.className = "history-item";
+    row.innerHTML = `
+      <div class="history-top"><span>${escapeHTML(item.shotId)}</span><span>${escapeHTML(new Date(item.time).toLocaleString())}</span></div>
+      <div class="history-excerpt">${escapeHTML(item.excerpt)}</div>
+      <div class="toolbar" style="margin-top:7px">
+        <button class="btn btn-small" type="button" data-history-copy="${escapeHTML(item.id)}">复制</button>
+        <button class="btn btn-small btn-quiet" type="button" data-history-load="${escapeHTML(item.id)}">载入设置</button>
+      </div>`;
+    row.querySelector("[data-history-copy]").addEventListener("click", () => copyText(item.prompt, "历史提示词已复制"));
+    row.querySelector("[data-history-load]").addEventListener("click", () => {
+      state.settings = { ...item.settings };
+      state.selectedAssetIds = [...item.selectedIds];
+      initForm(); renderAssets(); toast("已载入历史设置");
+    });
+    historyList.appendChild(row);
+  });
+}
+
+function openAssetDialog(asset = null) {
+  selectedImageData = asset?.imageData || "";
+  selectedImageName = asset?.imageName || "";
+  $("assetEditId").value = asset?.id || "";
+  $("assetDialogTitle").textContent = asset ? `编辑资产 · ${asset.name}` : "添加资产";
+  $("assetType").value = asset?.type || state.activeAssetTab;
+  $("assetName").value = asset?.name || "";
+  $("assetAliases").value = (asset?.aliases || []).join(", ");
+  $("assetDesc").value = asset?.desc || "";
+  $("assetLock").value = asset?.lock || "";
+  $("assetImage").value = "";
+  renderAssetImagePreview(selectedImageName);
+  $("deleteAssetBtn").classList.toggle("hidden", !asset);
+  $("assetDialog").showModal();
+}
+
+function renderAssetImagePreview(name) {
+  const preview = $("assetImagePreview");
+  if (selectedImageData) {
+    preview.innerHTML = `<img src="${escapeHTML(selectedImageData)}" alt="参考图预览">`;
+  } else {
+    preview.textContent = name ? `已记录文件名：${name}（未保存图片）` : "尚未导入图片";
+  }
+}
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const max = 1100;
+        const scale = Math.min(1, max / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.82));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function saveAssetFromForm(event) {
+  event.preventDefault();
+  const id = $("assetEditId").value;
+  const type = $("assetType").value;
+  const name = $("assetName").value.trim();
+  if (!name) return;
+  const aliases = $("assetAliases").value.split(/[,，]/).map(x => x.trim()).filter(Boolean);
+  const asset = {
+    id: id || uid(type === "character" ? "C" : type === "scene" ? "S" : "P"),
+    type,
+    name,
+    aliases,
+    desc: $("assetDesc").value.trim(),
+    lock: $("assetLock").value.trim(),
+    imageName: selectedImageData ? (selectedImageName || "已导入参考图") : "",
+    imageData: selectedImageData
+  };
+  if (id) {
+    const index = state.assets.findIndex(a => a.id === id);
+    if (index >= 0) state.assets[index] = asset;
+  } else {
+    state.assets.push(asset);
+  }
+  state.activeAssetTab = type;
+  persist(); renderAssets(); $("assetDialog").close(); toast("资产已保存");
+}
+
+function deleteAssetFromForm() {
+  const id = $("assetEditId").value;
+  if (!id || !confirm("确定删除这个资产吗？")) return;
+  state.assets = state.assets.filter(a => a.id !== id);
+  state.selectedAssetIds = state.selectedAssetIds.filter(x => x !== id);
+  persist(); renderAssets(); $("assetDialog").close(); toast("资产已删除");
+}
+
+function copyDescriptionRequest() {
+  const names = state.selection ? autoMatchedNames() : state.assets.map(a => a.name);
+  const selected = selectedAssets().map(a => assetToText(a)).join("\n\n");
+  const request = `请根据以下小说选区和已有资产，补全人物/场景/道具一致性卡。要求：每个资产分开；只描述文本能够支持或合理推断的内容；明确哪些是推测；输出可直接粘贴回 MiniMax H3 工作台的 JSON 数组，字段为 id,type,name,aliases,desc,lock,imageRef。\n\n小说选区：\n${state.selection || novelText.value.slice(0, 1800)}\n\n已有资产：\n${selected || "无"}\n\n需要重点描述：${names.join("、") || "选区中出现的人物、场景和道具"}`;
+  copyText(request, "描述补全请求已复制，可粘贴给 Agent");
+}
+
+function autoMatchedNames() {
+  return state.assets.filter(a => state.selectedAssetIds.includes(a.id)).map(a => a.name);
+}
+
+function saveTextFile(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.novelText = String(reader.result || "");
+    novelText.value = state.novelText;
+    state.selection = "";
+    updateTextMeta();
+    renderSelection(); persist(); toast("文本已导入");
+  };
+  reader.readAsText(file, "utf-8");
+}
+
+function updateTextMeta() {
+  $("textMeta").textContent = `${state.novelText.length.toLocaleString()} 字符 · 选区会保留在此项目中`;
+}
+
+function downloadTextFile(name, content, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function exportProject() {
+  collectSettings();
+  const payload = JSON.stringify(state, null, 2);
+  downloadTextFile(`${state.projectName || "h3-project"}.json`, payload, "application/json;charset=utf-8");
+  toast("项目 JSON 已导出");
+}
+
+function importProject(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(String(reader.result));
+      if (!parsed || !Array.isArray(parsed.assets)) throw new Error("invalid project");
+      state = parsed;
+      state.version = 1;
+      if (!state.assets) state.assets = [];
+      if (!state.history) state.history = [];
+      if (!state.settings) state.settings = defaultState().settings;
+      initForm(); novelText.value = state.novelText || ""; renderSelection(); renderAssets(); renderHistory(); updateTextMeta(); persist();
+      toast("项目已导入");
+    } catch {
+      toast("项目 JSON 无法读取");
+    }
+  };
+  reader.readAsText(file);
+}
+
+function resetAll() {
+  if (!confirm("清空当前项目并载入示例？")) return;
+  state = defaultState();
+  selectedImageData = "";
+  selectedImageName = "";
+  initForm(); novelText.value = state.novelText; renderSelection(); renderAssets(); renderHistory(); updateTextMeta(); persist();
+  promptOutput.textContent = "选中小说的某个区域，确认人物/场景卡，然后点击“生成 H3 提示词”。";
+  promptLength.textContent = "0 / 7000 字符"; promptStatus.textContent = "尚未生成"; promptStatus.className = "";
+  toast("已载入示例");
+}
+
+function bind() {
+  $("sampleBtn").addEventListener("click", resetAll);
+  $("clearBtn").addEventListener("click", resetAll);
+  $("captureSelectionBtn").addEventListener("click", captureSelection);
+  $("fitSelectionBtn").addEventListener("click", () => { captureSelection(false); suggestShotFromSelection(); toast("已用选区填充镜头字段"); });
+  $("selectMatchedBtn").addEventListener("click", () => { autoMatchAssets(); renderAssets(); persist(); });
+  $("generateBtn").addEventListener("click", generate);
+  $("copyPromptBtn").addEventListener("click", () => {
+    const text = promptOutput.textContent;
+    if (!state.lastPrompt || !text || text.startsWith("选中小说的某个区域")) toast("请先生成提示词");
+    else copyText(text, "H3 提示词已复制");
+  });
+  $("downloadPromptBtn").addEventListener("click", () => {
+    if (!state.lastPrompt) return toast("请先生成提示词");
+    downloadTextFile(`${state.settings.shotId || "shot"}-h3-prompt.md`, state.lastPrompt, "text/markdown;charset=utf-8");
+  });
+  $("exportProjectBtn").addEventListener("click", exportProject);
+  $("importProjectInput").addEventListener("change", e => { if (e.target.files[0]) importProject(e.target.files[0]); });
+  $("textFileInput").addEventListener("change", e => { if (e.target.files[0]) saveTextFile(e.target.files[0]); });
+  $("addAssetBtn").addEventListener("click", () => openAssetDialog());
+  $("closeAssetDialog").addEventListener("click", () => $("assetDialog").close());
+  $("assetForm").addEventListener("submit", saveAssetFromForm);
+  $("deleteAssetBtn").addEventListener("click", deleteAssetFromForm);
+  $("removeAssetImage").addEventListener("click", () => { selectedImageData = ""; selectedImageName = ""; $("assetImage").value = ""; renderAssetImagePreview(""); });
+  $("assetImage").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try { selectedImageData = await compressImage(file); selectedImageName = file.name; renderAssetImagePreview(file.name); }
+    catch { toast("图片读取失败"); }
+  });
+  $("copyDescriptionRequestBtn").addEventListener("click", copyDescriptionRequest);
+  novelText.addEventListener("mouseup", () => { setTimeout(() => captureSelection(false), 0); });
+  novelText.addEventListener("keyup", e => { if (e.shiftKey || e.key === "Shift") setTimeout(() => captureSelection(false), 0); });
+  novelText.addEventListener("input", () => { state.novelText = novelText.value; updateTextMeta(); persist(); });
+  document.querySelectorAll(".builder-panel input, .builder-panel textarea, .builder-panel select").forEach(el => {
+    el.addEventListener("change", () => { collectSettings(); });
+    el.addEventListener("input", () => { collectSettings(); });
+  });
+}
+
+function renderAll() {
+  novelText.value = state.novelText || "";
+  updateTextMeta();
+  initForm();
+  renderSelection();
+  renderAssets();
+  renderHistory();
+  if (state.lastPrompt) {
+    promptOutput.textContent = state.lastPrompt;
+    promptLength.textContent = `${state.lastPrompt.length} / 7000 字符`;
+    promptStatus.textContent = "已载入上次生成";
+    promptStatus.className = state.lastPrompt.length > 7000 ? "bad-text" : "ok-text";
+  }
+}
+
+bind();
+renderAll();
+</script>
+</body>
+</html>
