@@ -173,6 +173,7 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
 }
 .toast.show { transform: translateY(0); opacity: 1; }
 .hidden { display: none !important; }
+.file-input-hidden { position: fixed; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip-path: inset(50%); pointer-events: none; }
 .model-note { color: var(--muted); font-size: 11px; line-height: 1.55; }
 .model-note a { color: var(--accent-2); text-decoration: none; }
 @media (max-width: 1180px) {
@@ -199,8 +200,8 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
   <div class="header-actions">
     <button class="btn btn-small" id="sampleBtn">载入示例</button>
     <button class="btn btn-small" id="exportProjectBtn">导出项目 JSON</button>
-    <label class="btn btn-small" for="importProjectInput">导入项目 JSON</label>
-    <input class="hidden" type="file" id="importProjectInput" accept=".json,application/json">
+    <button class="btn btn-small" id="importProjectBtn">导入项目 JSON</button>
+    <input class="file-input-hidden" type="file" id="importProjectInput" accept=".json,application/json">
     <button class="btn btn-small btn-danger" id="clearBtn">清空</button>
   </div>
 </header>
@@ -212,8 +213,8 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
         <div class="panel-title">01 · 小说文本</div>
         <div class="panel-subtitle" id="textMeta">粘贴或导入 .txt / .md / .epub；EPUB 在浏览器本地解析</div>
       </div>
-      <label class="btn btn-small" for="textFileInput">导入文本 / EPUB</label>
-      <input class="hidden" type="file" id="textFileInput" accept=".txt,.md,.markdown,.epub,text/plain,text/markdown,application/epub+zip">
+      <button class="btn btn-small" id="importTextBtn">导入文本 / EPUB</button>
+      <input class="file-input-hidden" type="file" id="textFileInput" accept=".txt,.md,.markdown,.epub,text/plain,text/markdown,application/epub+zip">
     </div>
     <div class="panel-body">
       <textarea class="novel-input" id="novelText" spellcheck="false" placeholder="粘贴小说或剧本文本，然后在文本中用鼠标选中要改编的区域。"></textarea>
@@ -246,8 +247,9 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
       <div class="hr"></div>
       <div class="toolbar">
         <button class="btn btn-small" id="copyDescriptionRequestBtn">复制描述补全请求</button>
-        <label class="btn btn-small" for="importAssetInput">导入资产卡 JSON</label>
-        <input class="hidden" type="file" id="importAssetInput" accept=".json,application/json">
+        <button class="btn btn-small" id="importAssetBtn">导入资产卡 JSON</button>
+        <button class="btn btn-small" id="pasteAssetBtn">粘贴 JSON</button>
+        <input class="file-input-hidden" type="file" id="importAssetInput" accept=".json,application/json">
         <button class="btn btn-small btn-quiet" id="selectMatchedBtn">自动匹配选区</button>
       </div>
       <div class="status-list" id="consistencyStatus"></div>
@@ -350,6 +352,27 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
     <div class="dialog-footer">
       <button class="btn btn-small" type="button" id="deleteAssetBtn">删除</button>
       <button class="btn btn-primary" type="submit" id="saveAssetBtn">保存资产</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="assetJsonDialog">
+  <form method="dialog">
+    <div class="dialog-head">
+      <div>
+        <div class="panel-title">粘贴资产卡 JSON</div>
+        <div class="panel-subtitle">直接粘贴资产数组或完整项目 JSON，不经过文件选择器</div>
+      </div>
+      <button class="btn btn-small" type="button" id="closeAssetJsonDialog">关闭</button>
+    </div>
+    <div class="dialog-body">
+      <div class="field">
+        <label for="assetJsonText">JSON 内容</label>
+        <textarea id="assetJsonText" style="min-height:320px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace" placeholder='粘贴 { "assets": [...] } 或资产数组 JSON'></textarea>
+      </div>
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-primary" type="button" id="applyAssetJsonBtn">导入 JSON</button>
     </div>
   </form>
 </dialog>
@@ -1341,36 +1364,55 @@ function downloadTextFile(name, content, type = "text/plain;charset=utf-8") {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function applyAssetPack(parsed) {
+  const assets = Array.isArray(parsed) ? parsed : parsed.assets;
+  if (!Array.isArray(assets) || !assets.length) throw new Error("missing assets");
+  const normalized = assets.map((asset, index) => ({
+    id: asset.id || uid(asset.type === "character" ? "C" : asset.type === "scene" ? "S" : "P"),
+    type: ["character","scene","prop"].includes(asset.type) ? asset.type : "character",
+    name: String(asset.name || `资产 ${index + 1}`),
+    aliases: Array.isArray(asset.aliases) ? asset.aliases.map(String) : [],
+    desc: String(asset.desc || ""),
+    lock: String(asset.lock || ""),
+    imageName: String(asset.imageName || ""),
+    imageData: String(asset.imageData || "")
+  }));
+  state.assets = normalized;
+  state.selectedAssetIds = [];
+  state.activeAssetTab = "character";
+  if (parsed.settings) state.settings = { ...state.settings, ...parsed.settings };
+  state.relations = Array.isArray(parsed.relations) ? parsed.relations : [];
+  persist();
+  initForm();
+  renderAssets();
+  renderRelationships();
+  toast(`已导入 ${normalized.length} 个资产`);
+  return normalized.length;
+}
+
 function importAssetPack(file) {
   const reader = new FileReader();
   reader.onload = () => {
     try {
-      const parsed = JSON.parse(String(reader.result));
-      const assets = Array.isArray(parsed) ? parsed : parsed.assets;
-      if (!Array.isArray(assets) || !assets.length) throw new Error("missing assets");
-      const normalized = assets.map((asset, index) => ({
-        id: asset.id || uid(asset.type === "character" ? "C" : asset.type === "scene" ? "S" : "P"),
-        type: ["character","scene","prop"].includes(asset.type) ? asset.type : "character",
-        name: String(asset.name || `资产 ${index + 1}`),
-        aliases: Array.isArray(asset.aliases) ? asset.aliases.map(String) : [],
-        desc: String(asset.desc || ""),
-        lock: String(asset.lock || ""),
-        imageName: String(asset.imageName || ""),
-        imageData: String(asset.imageData || "")
-      }));
-      state.assets = normalized;
-      state.selectedAssetIds = [];
-      state.activeAssetTab = "character";
-      if (parsed.settings) state.settings = { ...state.settings, ...parsed.settings };
-      state.relations = Array.isArray(parsed.relations) ? parsed.relations : [];
-      persist(); initForm(); renderAssets(); renderRelationships(); toast(`已导入 ${normalized.length} 个资产`);
+      applyAssetPack(JSON.parse(String(reader.result)));
       $("importAssetInput").value = "";
     } catch (error) {
       console.error(error);
-      toast("资产卡 JSON 无法读取");
+      toast(`资产卡 JSON 无法读取：${error.message || "格式错误"}`);
     }
   };
   reader.readAsText(file, "utf-8");
+}
+
+function importAssetPackText(text) {
+  try {
+    applyAssetPack(JSON.parse(text));
+    $("assetJsonDialog").close();
+    $("assetJsonText").value = "";
+  } catch (error) {
+    console.error(error);
+    toast(`资产卡 JSON 无法读取：${error.message || "格式错误"}`);
+  }
 }
 
 function exportProject() {
@@ -1432,8 +1474,14 @@ function bind() {
     downloadTextFile(`${state.settings.shotId || "shot"}-h3-prompt.md`, state.lastPrompt, "text/markdown;charset=utf-8");
   });
   $("exportProjectBtn").addEventListener("click", exportProject);
+  $("importProjectBtn").addEventListener("click", () => $("importProjectInput").click());
   $("importProjectInput").addEventListener("change", e => { if (e.target.files[0]) importProject(e.target.files[0]); });
+  $("importAssetBtn").addEventListener("click", () => $("importAssetInput").click());
   $("importAssetInput").addEventListener("change", e => { if (e.target.files[0]) importAssetPack(e.target.files[0]); });
+  $("pasteAssetBtn").addEventListener("click", () => $("assetJsonDialog").showModal());
+  $("closeAssetJsonDialog").addEventListener("click", () => $("assetJsonDialog").close());
+  $("applyAssetJsonBtn").addEventListener("click", () => importAssetPackText($("assetJsonText").value));
+  $("importTextBtn").addEventListener("click", () => $("textFileInput").click());
   $("textFileInput").addEventListener("change", async e => { if (e.target.files[0]) await saveTextFile(e.target.files[0]); });
   $("addAssetBtn").addEventListener("click", () => openAssetDialog());
   $("closeAssetDialog").addEventListener("click", () => $("assetDialog").close());
