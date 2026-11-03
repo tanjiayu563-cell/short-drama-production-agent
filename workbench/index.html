@@ -276,6 +276,7 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
         <div class="field"><label for="ratio">画幅</label><select id="ratio"><option selected>9:16</option><option>16:9</option><option>1:1</option><option>4:3</option><option>adaptive</option></select></div>
         <div class="field"><label for="mode">生成模式</label><select id="mode"><option value="reference">参考生成</option><option value="i2v">首帧图生视频</option><option value="first-last">首尾帧</option><option value="t2v">文生视频</option></select></div>
         <div class="field"><label for="camera">运镜</label><input id="camera" value="[static]" placeholder="例如 [static]、[zoom]、[pan]"></div>
+        <div class="field"><label for="pacing">拆分节奏</label><select id="pacing"><option value="slow">慢 / 留白多</option><option value="normal" selected>正常</option><option value="fast">快 / 信息密</option></select></div>
       </div>
       <div class="field-grid three" style="margin-top:10px">
         <div class="field"><label for="shotSize">景别</label><select id="shotSize"><option>大远景</option><option>远景</option><option>全景</option><option selected>中景</option><option>中近景</option><option>近景</option><option>特写</option><option>大特写</option></select></div>
@@ -426,6 +427,7 @@ function defaultState() {
       ratio: "9:16",
       mode: "reference",
       camera: "[static]",
+      pacing: "normal",
       shotSize: "中景",
       angle: "平视，固定机位",
       lens: "50mm 等效焦段",
@@ -509,7 +511,7 @@ function initForm() {
   duration.innerHTML = "";
   for (let i = 4; i <= 15; i++) duration.add(new Option(`${i} 秒`, String(i)));
   duration.value = String(state.settings.duration || 8);
-  ["resolution","ratio","mode","camera","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"].forEach(key => {
+  ["resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"].forEach(key => {
     const el = $(key);
     if (el && state.settings[key] !== undefined) el.value = state.settings[key];
   });
@@ -518,7 +520,7 @@ function initForm() {
 
 function collectSettings() {
   state.projectName = $("projectName").value.trim() || "未命名项目";
-  const keys = ["shotId","resolution","ratio","mode","camera","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"];
+  const keys = ["shotId","resolution","ratio","mode","camera","pacing","shotSize","angle","lens","objective","action","ending","style","lighting","audio","performance","negative"];
   keys.forEach(key => state.settings[key] = $(key).value);
   state.settings.duration = Number($("duration").value);
   persist();
@@ -594,11 +596,13 @@ function renderRelationships() {
     relationList.innerHTML = `<span class="model-note">选中人物或场景后显示关系。</span>`;
     return;
   }
+  const detectedTerms = detectRelationTerms(state.selection || "");
+  const termHtml = detectedTerms.length ? `<span class="relation-chip">文内称谓：${escapeHTML(detectedTerms.join("、"))}（待确认指向）</span>` : "";
   if (!relations.length) {
-    relationList.innerHTML = `<span class="model-note">暂无显式关系卡；生成时按正文称谓、站位和动作推断，不要擅自新增亲属关系。</span>`;
+    relationList.innerHTML = termHtml || `<span class="model-note">暂无显式关系卡；生成时按正文称谓、站位和动作推断，不要擅自新增亲属关系。</span>`;
     return;
   }
-  relationList.innerHTML = relations.map(rel => {
+  relationList.innerHTML = termHtml + relations.map(rel => {
     const a = state.assets.find(x => x.id === rel.a);
     const b = state.assets.find(x => x.id === rel.b);
     const label = `${a?.name || rel.a} ↔ ${b?.name || rel.b} · ${rel.label || "关系待确认"}`;
@@ -735,6 +739,15 @@ function relationTextForBeat(selected) {
   return "单人调度，用留白、框中框或环境压迫表现人物状态。";
 }
 
+function beadsTotal(beats, key) {
+  return Math.round(beats.reduce((sum, beat) => sum + (Number(beat[key]) || 0), 0) * 10) / 10;
+}
+
+function detectRelationTerms(text) {
+  const terms = ["爷爷","奶奶","父亲","母亲","爸爸","妈妈","伯父","叔叔","舅舅","姨妈","哥哥","姐姐","弟弟","妹妹","丈夫","妻子","儿子","女儿","师父","徒弟","同学","同事","朋友"];
+  return [...new Set(terms.filter(term => text.includes(term)))];
+}
+
 function autoBreakdown() {
   captureSelection(false);
   if (!state.selection.trim()) {
@@ -746,12 +759,24 @@ function autoBreakdown() {
     toast("选区内没有可用句子");
     return;
   }
-  const maxBeats = 6;
-  const groupSize = Math.ceil(sentences.length / maxBeats);
-  const groups = [];
-  for (let i = 0; i < sentences.length; i += groupSize) {
-    groups.push(sentences.slice(i, i + groupSize).join(""));
+  const pacing = state.settings.pacing || "normal";
+  const targetChars = pacing === "slow" ? 28 : pacing === "fast" ? 55 : 40;
+  const pieces = [];
+  for (const sentence of sentences) {
+    if (sentence.length <= targetChars * 1.45) {
+      pieces.push(sentence);
+    } else {
+      const clauses = sentence.split(/(?<=[，,；;：:])/).map(s => s.trim()).filter(Boolean);
+      for (const clause of clauses.length ? clauses : [sentence]) {
+        if (clause.length <= targetChars * 1.45) {
+          pieces.push(clause);
+        } else {
+          for (let i = 0; i < clause.length; i += targetChars) pieces.push(clause.slice(i, i + targetChars));
+        }
+      }
+    }
   }
+  const groups = pieces;
   const selected = selectedAssets();
   const shotPools = {
     dialogue: ["中近景", "过肩中景", "双人中景", "近景"],
@@ -810,7 +835,22 @@ function autoBreakdown() {
     const sound = type === "sound"
       ? `画外声/拟音优先：${text.slice(0, 90)}`
       : type === "dialogue" ? "保留呼吸、环境和对话间隙；不要用配乐盖住潜台词。" : "环境声与动作拟音跟随画面，不额外加解释性音乐。";
+    const paceFactor = pacing === "slow" ? 1.25 : pacing === "fast" ? 0.82 : 1;
+    const dialogueChars = quotes.join("").length || text.length;
+    const actionHits = (text.match(/(跑|冲|推|拉|拿|放|打开|关|抬|举|抓|翻|拧|敷|合上|看|走|转身|跪下|磕头)/g) || []).length;
+    let editSeconds = type === "dialogue"
+      ? Math.max(1.8, dialogueChars / 4.2 + 0.8)
+      : type === "action" ? Math.max(2.8, 2.5 + Math.min(2.2, actionHits * 0.35))
+      : type === "inner" ? 2.2
+      : type === "text_clue" ? 1.6
+      : type === "sound" ? 2.0
+      : 2.4;
+    editSeconds = Math.max(1.2, Math.min(6.5, editSeconds * paceFactor));
+    editSeconds = Math.round(editSeconds * 10) / 10;
+    const generationSeconds = Math.max(4, Math.min(15, Math.ceil(editSeconds)));
     return {
+      editSeconds,
+      generationSeconds,
       index: index + 1,
       shotId: `${state.settings.shotId}-B${String(index + 1).padStart(2, "0")}`,
       function: index === 0 ? "建立空间 / 异常" : index === groups.length - 1 ? "收束 / 留悬念" : type === "dialogue" ? "关系推进" : type === "inner" ? "人物反应" : "信息推进",
@@ -826,26 +866,55 @@ function autoBreakdown() {
       camera,
       lens: type === "text_clue" ? "微距 / 50mm" : type === "dialogue" ? "35–50mm" : "35–50mm",
       reason: reasons[type] || reasons.description,
-      duration: Math.max(2, Math.min(6, Math.ceil(text.length / 22)))
+      duration: editSeconds
     };
   });
-  state.lastAdaptation = { beats, relations: (state.relations || []).filter(rel => new Set(selected.map(a => a.id)).has(rel.a) && new Set(selected.map(a => a.id)).has(rel.b)) };
+  const totalEditSeconds = beadsTotal(beats, "editSeconds");
+  const totalGenerationSeconds = beadsTotal(beats, "generationSeconds");
+  state.lastAdaptation = {
+    beats,
+    relationships: (state.relations || []).filter(rel => new Set(selected.map(a => a.id)).has(rel.a) && new Set(selected.map(a => a.id)).has(rel.b)),
+    summary: { shotCount: beats.length, totalEditSeconds, totalGenerationSeconds, pacing },
+    detectedRelationTerms: detectRelationTerms(state.selection)
+  };
   renderAdaptation();
   persist();
   toast(`已拆成 ${beats.length} 个节拍`);
 }
 
-function renderAdaptation() {
+function normalizeAdaptationData() {
   const data = state.lastAdaptation;
+  if (!data) return null;
+  data.relationships = data.relationships || data.relations || [];
+  data.detectedRelationTerms = data.detectedRelationTerms || [];
+  for (const beat of data.beats || []) {
+    beat.editSeconds = beat.editSeconds ?? beat.duration ?? 3;
+    beat.generationSeconds = beat.generationSeconds ?? Math.max(4, Math.min(15, Math.ceil(beat.editSeconds)));
+  }
+  data.summary = data.summary || {
+    shotCount: (data.beats || []).length,
+    totalEditSeconds: (data.beats || []).reduce((sum, beat) => sum + (beat.editSeconds || 0), 0),
+    totalGenerationSeconds: (data.beats || []).reduce((sum, beat) => sum + (beat.generationSeconds || 0), 0),
+    pacing: state.settings.pacing || "normal"
+  };
+  return data;
+}
+
+function renderAdaptation() {
+  const data = normalizeAdaptationData();
   if (!data || !data.beats?.length) {
     adaptationPanel.textContent = "选中小说区域后点击“自动拆解选区”。";
     return;
   }
-  adaptationPanel.innerHTML = data.beats.map(beat => `
+  adaptationPanel.innerHTML = `
+    <div class="selection-card">
+      <div class="selection-head"><strong>时长拆分</strong><span class="char-count">${escapeHTML(data.summary.pacing)}节奏</span></div>
+      <div class="selection-text">镜头数：${data.summary.shotCount} · 预计成片：${data.summary.totalEditSeconds} 秒 · H3 片元合计：${data.summary.totalGenerationSeconds} 秒${data.detectedRelationTerms.length ? ` · 文内关系称谓：${escapeHTML(data.detectedRelationTerms.join("、"))}` : ""}</div>
+    </div>` + data.beats.map(beat => `
     <article class="beat-card">
       <div class="beat-head">
         <div class="beat-title">节拍 ${String(beat.index).padStart(2,"0")} · ${escapeHTML(beat.function)}</div>
-        <div class="badge-row"><span class="badge visual">${escapeHTML(beat.mode)}</span><span class="badge voice">${escapeHTML(beat.shotSize)}</span><span class="badge">${escapeHTML(beat.camera)}</span></div>
+        <div class="badge-row"><span class="badge visual">${escapeHTML(beat.mode)}</span><span class="badge voice">${escapeHTML(beat.shotSize)}</span><span class="badge">${beat.editSeconds}s 成片 / ${beat.generationSeconds}s 生成</span></div>
       </div>
       <div class="beat-source">原文节拍：${escapeHTML(beat.source)}</div>
       <div class="beat-grid">
@@ -866,7 +935,7 @@ function applyBeat(index) {
   const beat = state.lastAdaptation?.beats?.find(item => item.index === index);
   if (!beat) return;
   state.settings.shotId = beat.shotId;
-  state.settings.duration = Math.max(4, Math.min(15, 4 + beat.duration));
+  state.settings.duration = beat.generationSeconds;
   state.settings.shotSize = beat.shotSize;
   state.settings.camera = beat.camera;
   state.settings.angle = beat.angle;
@@ -881,24 +950,26 @@ function applyBeat(index) {
 }
 
 function copyAdaptation() {
-  const data = state.lastAdaptation;
+  const data = normalizeAdaptationData();
   if (!data?.beats?.length) return toast("先自动拆解选区");
   const lines = [
     "# 小说选区分镜方案",
     "",
     `选区原文：${state.selection}`,
     "",
+    `拆分节奏：${data.summary.pacing}；镜头数：${data.summary.shotCount}；预计成片：${data.summary.totalEditSeconds} 秒；H3片元合计：${data.summary.totalGenerationSeconds} 秒。`,
+    "",
     "## 人物关系",
-    ...(data.relations.length ? data.relations.map(rel => {
+    ...(data.relationships.length ? data.relationships.map(rel => {
       const a = state.assets.find(x => x.id === rel.a)?.name || rel.a;
       const b = state.assets.find(x => x.id === rel.b)?.name || rel.b;
       return `- ${a} ↔ ${b}：${rel.label || "待确认"}${rel.note ? `（${rel.note}）` : ""}`;
     }) : ["- 未记录显式关系；按正文称谓、距离和动作推断。"]),
     "",
     "## 节拍分配",
-    "| 节拍 | 叙事功能 | 呈现方式 | 画面 | 对白/旁白 | 镜头 | 声音 | 关系调度 |",
-    "|---|---|---|---|---|---|---|---|",
-    ...data.beats.map(beat => `| ${beat.index} | ${beat.function} | ${beat.mode} | ${beat.visual.replace(/\n/g," ")} | ${beat.voice.replace(/\n/g," ")} | ${beat.shotSize}；${beat.angle}；${beat.camera} | ${beat.sound.replace(/\n/g," ")} | ${beat.relation.replace(/\n/g," ")} |`),
+    "| 节拍 | 成片秒数 | H3生成秒数 | 叙事功能 | 呈现方式 | 画面 | 对白/旁白 | 镜头 | 声音 | 关系调度 |",
+    "|---|---:|---:|---|---|---|---|---|---|---|",
+    ...data.beats.map(beat => `| ${beat.index} | ${beat.editSeconds} | ${beat.generationSeconds} | ${beat.function} | ${beat.mode} | ${beat.visual.replace(/\n/g," ")} | ${beat.voice.replace(/\n/g," ")} | ${beat.shotSize}；${beat.angle}；${beat.camera} | ${beat.sound.replace(/\n/g," ")} | ${beat.relation.replace(/\n/g," ")} |`),
     "",
     "## 反重复检查",
     "- 避免连续三个节拍使用同一景别；",
