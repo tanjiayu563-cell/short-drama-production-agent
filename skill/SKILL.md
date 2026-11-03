@@ -134,6 +134,8 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 当用户提供实际生成视频时，读取 [references/generated-video-qc.md](references/generated-video-qc.md)。先运行 [scripts/video_qc.py](scripts/video_qc.py) 生成元数据、抽样帧、联系表和技术检查，再由 Agent 查看视频或联系表完成语义质检。
 
+当用户明确要求自动调用 MiniMax H3 文生视频时，读取 [references/minimax-h3-api-integration.md](references/minimax-h3-api-integration.md)。只有在用户确认镜头后，才通过本地服务提交单镜任务；默认使用 4 秒、768P、9:16，不自动批量生成。API Key 只能通过本地环境变量提供，不写入提示词、项目 JSON 或日志。
+
 质检必须包含：
 
 - 原镜头任务和验收标准；
