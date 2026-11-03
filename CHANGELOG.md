@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.4.0 — 2026-11-03
+
+### Added
+
+- Local MiniMax H3 text-to-video bridge with API-key isolation.
+- Confirm-before-generate workflow in the workbench.
+- Automatic task polling, MP4 download, and local video preview.
+- Economy defaults: 4 seconds, 768P, 9:16, one confirmed shot per call.
+- Standalone `minimax_h3_client.py` for dry-run, submit, poll, and download.
+- Local server health and job endpoints.
+
+### Safety
+
+- API key is read only from `MINIMAX_API_KEY` on the local server.
+- The first T2V integration does not upload local reference images.
+- Successful task submission is not treated as a successful creative result; generated video still requires QC.
+
 ## v1.3.0 — 2026-11-03
 
 ### Added

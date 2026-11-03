@@ -67,6 +67,25 @@ Style Lock
 质量自检与待确认项
 ```
 
+## MiniMax H3 自动文生视频
+
+工作台支持“确认当前分镜后，自动提交 MiniMax H3 文生视频任务”的本地闭环。API Key 只通过环境变量读取，不进入浏览器或项目 JSON。
+
+```bash
+export MINIMAX_API_KEY="your-key"
+python3 skill/scripts/local_server.py --port 8787
+```
+
+打开：
+
+```text
+http://127.0.0.1:8787/workbench/index.html
+```
+
+经济默认值：`MiniMax-H3`、4 秒、768P、9:16、单镜确认。不会默认批量提交。2K、更长时长和批量生成需要用户主动修改。
+
+接口依据：[MiniMax 视频生成文档](https://platform.minimax.io/docs/guides/video-generation.md)。
+
 ## 安装
 
 要求：支持读取 `SKILL.md` 的 Codex 环境。视频质检脚本建议安装 Python 3.9+ 和 `ffmpeg`；`ffprobe` 可选，缺少时会从 FFmpeg 输入摘要读取基础元数据。macOS 在缺少 FFmpeg 时可尝试用 `xcrun clang` 和 AVFoundation 提取元数据与关键帧；黑帧、冻结帧和场景切点检测仍需要 FFmpeg。
@@ -158,6 +177,7 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   │   └── openai.yaml
 │   ├── references/
 │   │   ├── intake-and-diagnosis.md
+│   │   ├── minimax-h3-api-integration.md
 │   │   ├── visual-direction.md
 │   │   ├── storyboard-spec.md
 │   │   ├── video-model-prompting.md
@@ -178,6 +198,8 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   │   ├── style-option-template.md
 │   │   └── knowledge-index-template.md
 │   └── scripts/
+│       ├── local_server.py
+│       ├── minimax_h3_client.py
 │       ├── video_qc.py
 │       └── video_qc_macos.m
 ├── workbench/
