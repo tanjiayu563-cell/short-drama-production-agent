@@ -21,6 +21,7 @@
 - MiniMax H3 model adapter with official capability notes, multimodal reference roles, 4–15 second constraints, and consistency-card requirements.
 - Local single-file novel-to-shot workbench: import `.txt`/`.md`/unencrypted `.epub`, select a passage, match assets, import reference images or descriptions, and generate MiniMax H3 prompts.
 - Workbench project export/import, local autosave, prompt character counter, reference-count warnings, history, and Markdown export.
+- Direct JSON paste fallback for environments where the browser file picker does not open.
 - MiniMax H3 prompt template and end-to-end example.
 
 ### Changed
