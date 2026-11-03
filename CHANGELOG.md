@@ -8,6 +8,7 @@
 - Scene-level relationship mapping with explicit versus inferred relationships, power distance, concealment, and spatial blocking.
 - Anti-repetition shot grammar and a selection-to-beat workbench that produces up to six differentiated beats.
 - Workbench relationship display, beat cards, apply-to-shot action, and copyable storyboard plan.
+- Separate edit-duration and generation-duration estimates; slower/faster pacing controls; longer selections produce more shots instead of being compressed into one clip.
 
 ### Changed
 
