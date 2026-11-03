@@ -84,7 +84,7 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 ### 4. 设计场景与镜头
 
-如果用户从长文本或小说中选中了一个区域，只处理选区及其必要的上下文。保留原文选区，不要擅自把整章内容压进一个镜头。先从选区提取动作、对白、环境和信息变化，再匹配人物、场景和道具资产。
+如果用户从长文本、小说或 EPUB 中选中了一个区域，只处理选区及其必要的上下文。保留原文选区，不要擅自把整章内容压进一个镜头。先从选区提取动作、对白、环境和信息变化，再匹配人物、场景和道具资产。EPUB 只在用户本地解析，不把全文上传或复制到公开仓库。
 
 读取 [references/storyboard-spec.md](references/storyboard-spec.md)。一个镜头只对应一次连续取景；发生剪切就新建镜号。对每镜说明：
 
