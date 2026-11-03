@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.0 — 2026-11-03
+
+### Added
+
+- MiniMax H3 model adapter with official capability notes, multimodal reference roles, 4–15 second constraints, and consistency-card requirements.
+- Local single-file novel-to-shot workbench: import `.txt`/`.md`, select a passage, match assets, import reference images or descriptions, and generate MiniMax H3 prompts.
+- Workbench project export/import, local autosave, prompt character counter, reference-count warnings, history, and Markdown export.
+- MiniMax H3 prompt template and end-to-end example.
+
+### Changed
+
+- Asset consistency now tracks character, scene, and prop IDs, aliases, descriptions, locks, image files, and reference order.
+- The workbench switches text-only references to T2V and uses reference generation only when image assets are present.
+- Prompt drafts expose H3 mode, duration, resolution, aspect ratio, camera command, style lock, sound, continuity, and edit boundaries.
+
+### Clarified
+
+- MiniMax is the brand name; the API model name is `MiniMax-H3`.
+- The workbench currently handles plain text and Markdown; complex `.docx` layout is not parsed directly.
+
 ## v1.1.0 — 2026-11-02
 
 ### Added

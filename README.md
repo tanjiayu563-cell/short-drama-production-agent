@@ -2,7 +2,7 @@
 
 [English](#english) | 简体中文
 
-把短剧创意、梗概或完整剧本，转成可执行的前期制作包：剧本诊断、视觉风格、人物与场景一致性、逐镜分镜、模型感知的视频提示词、生成视频质检和版本迭代。
+把短剧创意、梗概、完整剧本或小说选区，转成可执行的前期制作包：剧本诊断、视觉风格、人物与场景一致性、逐镜分镜、MiniMax H3/Seedance 等模型的视频提示词、生成视频质检和版本迭代。
 
 > 当前状态：内部验证版本。已验证 Skill 结构、相对链接、配置和质检脚本语法；尚未完成真实创作者和真实视频样本的规模化验证，不宣称业务效果、模型成功率或平台过审能力。
 
@@ -27,6 +27,8 @@
 - **逐镜分镜**：每镜包含叙事功能、景别、机位、焦段、运动、构图、动作、台词、声音、转场、连续性和备选方案。
 - **视频提示词包**：支持 T2V、I2V、R2V、V2V、视频延长和定向编辑；先核验模型能力，再生成模型适配提示词。
 - **Seedance 适配**：包含 Seedance 2.0/2.5 的已核实能力、时间分段、多模态参考和长视频延长写法。
+- **MiniMax H3 适配**：支持 T2V、图片/首尾帧、图片/视频/音频参考、原生声音、4–15 秒输出和角色/场景一致性锁定。
+- **小说选区工作台**：导入 `.txt` / `.md` 小说文本，鼠标选中一个区域，自动匹配人物/场景/道具资产，生成 H3 单镜提示词。
 - **生成视频质检**：提取元数据、抽样帧、联系表和技术事件，再由 Agent 对照原镜头任务做语义质检。
 - **迭代闭环**：输出带时间点的问题、根因、P0/P1/P2 分级、下一版完整提示词和单变量回归记录。
 - **质量闸门**：用 10 项硬性检查和 9 类验收场景识别不可交付结果。
@@ -49,6 +51,8 @@ Style Lock
 人物、场景、道具一致性卡
         ↓
 逐镜分镜与制作风险
+        ↓
+小说选区 + 人物/背景资产锁定
         ↓
 模型档案 + 视频生成提示词
         ↓
@@ -108,12 +112,30 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 
 模型名称或版本不明确时，应先核验。例如“Muse”存在多个不相关产品命名，当前检索到的 Meta Muse 是个人 AI Agent，不是已核实的视频生成模型。必须拿到具体产品链接或版本后才能写专属提示词。
 
+## 小说选区工作台
+
+打开 [`workbench/index.html`](workbench/index.html)，或使用任务输出中的 `minimax-h3-storyboard-workbench.html`。
+
+支持：
+
+- 导入或粘贴 `.txt` / `.md` 小说文本；
+- 用鼠标选中任意区域，捕获原文选区；
+- 建立人物、场景和道具资产库；
+- 每个资产可导入图片，或只写文字描述和一致性锁；
+- 根据选区自动匹配名称/别名；
+- 生成 MiniMax H3 单镜提示词；
+- 提示 7000 字符上限、9 张图片上限和总参考文件上限；
+- 导出项目 JSON、提示词 Markdown 和版本记录。
+
+当前工作台是本地单文件应用，不上传文本或图片到第三方；`.docx` 请先转换为文本或直接粘贴正文。
+
 ## 示例
 
 - [示例输入：原创悬疑短剧](examples/01-demo-input.md)
 - [风格方案：等待用户选择](examples/02-demo-style-options.md)
 - [风格锁定后的逐镜分镜](examples/03-demo-shot-list.md)
 - [Seedance 2.5 提示词示例](examples/04-demo-seedance-prompt.md)
+- [MiniMax H3 选区提示词示例](examples/05-demo-minimax-h3-prompt.md)
 
 示例是原创虚构内容，仅用于展示交付颗粒度。
 
@@ -134,6 +156,7 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   │   ├── storyboard-spec.md
 │   │   ├── video-model-prompting.md
 │   │   ├── seedance-prompting.md
+│   │   ├── minimax-h3-prompting.md
 │   │   ├── generated-video-qc.md
 │   │   ├── production-handoff.md
 │   │   ├── quality-gates.md
@@ -141,6 +164,7 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   ├── assets/
 │   │   ├── production-bible-template.md
 │   │   ├── video-prompt-pack-template.md
+│   │   ├── minimax-h3-shot-template.md
 │   │   ├── video-qc-report-template.md
 │   │   ├── iteration-log-template.md
 │   │   ├── style-option-template.md
@@ -148,11 +172,15 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 │   └── scripts/
 │       ├── video_qc.py
 │       └── video_qc_macos.m
+├── workbench/
+│   ├── README.md
+│   └── index.html
 └── examples/
     ├── 01-demo-input.md
     ├── 02-demo-style-options.md
     ├── 03-demo-shot-list.md
-    └── 04-demo-seedance-prompt.md
+    ├── 04-demo-seedance-prompt.md
+    └── 05-demo-minimax-h3-prompt.md
 ```
 
 ## 质量模型
@@ -176,6 +204,8 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 - 不直接完成实拍、表演、配音、音乐授权、平台过审或成片渲染。
 - 不能保证播放量、涨粉、收益或平台审核结果。
 - 平台规则、法律、预算和档期会变化，运行时必须核验。
+- MiniMax H3、Seedance 等模型的 UI、API、地区能力和限制会变化，使用前必须重新核验。
+- 选区工作台目前支持 `.txt` / `.md`，不直接解析复杂 `.docx` 排版、表格或批注。
 - AI 生成的手部、口型、文字、反射和复杂动作仍需要单独测试。
 - 模型官方页面、产品 UI 和 API 能力可能不同，使用前必须核验版本和地区。
 - “Muse”等名称存在歧义；未确认具体产品前，不提供虚构的模型专属提示词语法。
@@ -208,6 +238,6 @@ Agent 应先提取技术证据和关键帧，再判断是否达标；没有看�
 
 ## English
 
-An independent Codex Skill that turns a short-drama idea or script into a decision-closed pre-production package: script diagnosis, visual direction, character and location consistency, executable shot list, model-aware video prompts, generated-video QC, and a versioned refinement loop.
+An independent Codex Skill and local workbench that turns a short-drama idea, script, or selected novel passage into a decision-closed pre-production package: script diagnosis, visual direction, character and location consistency, executable shot list, MiniMax H3/Seedance-aware video prompts, generated-video QC, and a versioned refinement loop.
 
 It intentionally stops for user selection when multiple materially different visual directions are viable. Video-model capabilities are verified before model-specific prompting. The project is an internal validation build, not an official OpenAI product, and does not claim user outcomes, model success rates, approval, or production completion that has not been verified.
