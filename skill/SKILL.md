@@ -82,7 +82,20 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 当用户指定 Seedance、MiniMax H3、Sora、Veo、Kling、Runway、PixVerse、Vidu、Pika、Wan 等模型时，先建立 `Model Profile`，核验具体产品、版本、输入模态、时长、参考语法和音频能力。Seedance 的已核实适配读取 [references/seedance-prompting.md](references/seedance-prompting.md)；MiniMax H3 读取 [references/minimax-h3-prompting.md](references/minimax-h3-prompting.md)。
 
-### 4. 设计场景与镜头
+### 4. 小说改编判断
+
+读取 [references/adaptation-and-shot-variety.md](references/adaptation-and-shot-variety.md)。对选区逐信息单元判断：
+
+- 哪些内容适合直接画面、动作、表演或道具呈现；
+- 哪些必须保留为对白；
+- 哪些内心或背景信息才需要短旁白；
+- 哪些文字信息应做插入镜并后期合成；
+- 哪些声音应先于画面出现；
+- 哪些信息重复，应删除而不是再写一层 VO。
+
+同时建立当前选区的人物关系图和关系调度，说明权力位置、信任、隐瞒、身体距离与空间阻隔。关系优先用站位、距离、视线、谁持有物件和画面分割表现，不靠台词解释。
+
+### 5. 设计场景与镜头
 
 如果用户从长文本、小说或 EPUB 中选中了一个区域，只处理选区及其必要的上下文。保留原文选区，不要擅自把整章内容压进一个镜头。先从选区提取动作、对白、环境和信息变化，再匹配人物、场景和道具资产。EPUB 只在用户本地解析，不把全文上传或复制到公开仓库。
 
@@ -101,7 +114,9 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 不要用“电影感、唯美、高级”代替具体设计。每个视觉选择都要能回答“它服务什么叙事信息”。
 
-### 5. 做可行性、连续性与合规检查
+镜头设计必须避免千篇一律：不连续三个节拍使用同一景别；不把每句对白都拍成同一种近景；一场戏至少包含建立空间、动作、反应、信息插入或关系镜头中的三种功能。运镜必须有动机和落幅。
+
+### 6. 做可行性、连续性与合规检查
 
 读取 [references/production-handoff.md](references/production-handoff.md) 和 [references/quality-gates.md](references/quality-gates.md)。至少检查：
 
@@ -113,7 +128,7 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 外部规则只在能核验时引用；不要凭记忆编造平台阈值、法律条款、费用或档期。
 
-### 6. 生成视频质检
+### 7. 生成视频质检
 
 当用户提供实际生成视频时，读取 [references/generated-video-qc.md](references/generated-video-qc.md)。先运行 [scripts/video_qc.py](scripts/video_qc.py) 生成元数据、抽样帧、联系表和技术检查，再由 Agent 查看视频或联系表完成语义质检。
 
@@ -130,13 +145,13 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 脚本只负责生成证据，不替代语义判断。不得把“脚本运行成功”说成“视频通过质检”。
 
-### 7. 迭代与回归
+### 8. 迭代与回归
 
 每轮只改变一个主要变量：提示词、参考素材、参数、时长、拆镜或模型版本。必须保留上一版提示词、参数、评分和问题记录，使用 [assets/iteration-log-template.md](assets/iteration-log-template.md)。
 
 如果连续两轮重试没有改善核心问题，问题来自模型已知限制，或拆镜/实拍/后期更便宜，应停止无意义重试并给出替代方案。
 
-### 8. 交付与自检
+### 9. 交付与自检
 
 使用 [assets/production-bible-template.md](assets/production-bible-template.md) 组织最终文本。默认输出 Markdown；用户指定其他文本格式时再转换。
 
@@ -148,12 +163,14 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 4. Style Lock 与视觉制作圣经；
 5. 人物、场景、服化道和关键道具卡；
 6. 场景拆解；
-7. 逐镜头分镜；
-8. 视频模型档案、生成提示词、参考素材职责和参数建议；
-9. 声音、剪辑、字幕和后期清单；
-10. 生成视频质检报告与迭代记录（如已生成）；
-11. 制作依赖、复杂度、风险与替代方案；
-12. 质量自评与未解决事项。
+7. 小说选区的画面/对白/旁白/声音分配表；
+8. 人物关系图与关系调度说明；
+9. 逐镜头分镜（包含镜头功能与去重复自检）；
+10. 视频模型档案、生成提示词、参考素材职责和参数建议；
+11. 声音、剪辑、字幕和后期清单；
+12. 生成视频质检报告与迭代记录（如已生成）；
+13. 制作依赖、复杂度、风险与替代方案；
+14. 质量自评与未解决事项。
 
 ## 外部资料与知识库
 
