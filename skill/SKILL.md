@@ -80,9 +80,11 @@ description: Turn a short-drama idea or script into a decision-closed visual bib
 
 需要 AI 视频提示词时，读取 [references/video-model-prompting.md](references/video-model-prompting.md)，采用“主体 + 起始状态 + 动作阶段 + 结束状态 + 环境 + 光影 + 镜头 + 声音 + 连续性 + 负面约束”的结构；把角色卡、场景卡和道具卡作为跨镜头约束，不把关键词堆砌当分镜。
 
-当用户指定 Seedance、Sora、Veo、Kling、Runway、Hailuo、PixVerse、Vidu、Pika、Wan 等模型时，先建立 `Model Profile`，核验具体产品、版本、输入模态、时长、参考语法和音频能力。Seedance 的已核实适配读取 [references/seedance-prompting.md](references/seedance-prompting.md)。
+当用户指定 Seedance、MiniMax H3、Sora、Veo、Kling、Runway、PixVerse、Vidu、Pika、Wan 等模型时，先建立 `Model Profile`，核验具体产品、版本、输入模态、时长、参考语法和音频能力。Seedance 的已核实适配读取 [references/seedance-prompting.md](references/seedance-prompting.md)；MiniMax H3 读取 [references/minimax-h3-prompting.md](references/minimax-h3-prompting.md)。
 
 ### 4. 设计场景与镜头
+
+如果用户从长文本或小说中选中了一个区域，只处理选区及其必要的上下文。保留原文选区，不要擅自把整章内容压进一个镜头。先从选区提取动作、对白、环境和信息变化，再匹配人物、场景和道具资产。
 
 读取 [references/storyboard-spec.md](references/storyboard-spec.md)。一个镜头只对应一次连续取景；发生剪切就新建镜号。对每镜说明：
 
