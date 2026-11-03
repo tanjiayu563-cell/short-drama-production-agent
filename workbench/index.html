@@ -127,6 +127,21 @@ h1 { margin: 6px 0 0; font-size: clamp(22px, 3vw, 34px); line-height: 1.12; lett
 .status-item.warn::before { background: var(--accent); }
 .status-item.bad { color: #f2b7b2; }
 .status-item.bad::before { background: var(--danger); }
+.relation-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+.relation-chip { border: 1px solid rgba(143,208,196,.3); background: rgba(143,208,196,.07); border-radius: 999px; padding: 5px 9px; color: #cfe7e0; font-size: 11px; }
+.adaptation-panel { display: grid; gap: 9px; }
+.beat-card { border: 1px solid var(--line); border-radius: 12px; background: #171c1f; padding: 11px; }
+.beat-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; margin-bottom: 7px; }
+.beat-title { font-size: 12px; font-weight: 700; }
+.badge-row { display: flex; gap: 5px; flex-wrap: wrap; }
+.badge { border-radius: 999px; background: var(--panel-3); color: var(--muted); font-size: 10px; padding: 3px 6px; }
+.badge.visual { color: var(--accent-2); background: rgba(143,208,196,.12); }
+.badge.voice { color: var(--accent); background: rgba(240,164,91,.12); }
+.beat-source { color: var(--muted); font-size: 11px; line-height: 1.5; margin: 5px 0 7px; }
+.beat-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
+.beat-field { color: #dbe4df; font-size: 11.5px; line-height: 1.5; }
+.beat-field b { color: var(--muted); font-weight: 600; margin-right: 4px; }
+.beat-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 .hr { height: 1px; background: var(--line); margin: 14px 0; }
 .prompt-output {
   min-height: 270px; max-height: 520px; overflow: auto; white-space: pre-wrap;
@@ -212,6 +227,7 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
       <div class="toolbar" style="margin-top:10px">
         <button class="btn btn-small" id="captureSelectionBtn">捕获当前选区</button>
         <button class="btn btn-small btn-quiet" id="fitSelectionBtn">用选区填充镜头</button>
+        <button class="btn btn-small" id="autoBreakdownBtn">自动拆解选区</button>
       </div>
     </div>
   </section>
@@ -235,6 +251,9 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
         <button class="btn btn-small btn-quiet" id="selectMatchedBtn">自动匹配选区</button>
       </div>
       <div class="status-list" id="consistencyStatus"></div>
+      <div class="hr"></div>
+      <div class="panel-title" style="font-size:12px;margin-bottom:7px">人物关系</div>
+      <div class="relation-list" id="relationList"></div>
     </div>
   </section>
 
@@ -272,6 +291,15 @@ dialog::backdrop { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); }
         <div class="field field-span-2"><label for="negative">禁止项 / 编辑边界</label><textarea id="negative"></textarea></div>
       </div>
 
+      <div class="hr"></div>
+      <div class="toolbar" style="justify-content:space-between;margin-bottom:9px">
+        <div>
+          <div class="panel-title" style="font-size:12px">叙事分配与镜头节奏</div>
+          <div class="panel-subtitle">先决定哪些信息用画面、哪些用对白/旁白，再生成单镜提示词</div>
+        </div>
+        <button class="btn btn-small btn-quiet" id="copyAdaptationBtn">复制分镜方案</button>
+      </div>
+      <div class="adaptation-panel" id="adaptationPanel">选中小说区域后点击“自动拆解选区”。</div>
       <div class="hr"></div>
       <div class="prompt-meta">
         <span id="promptStatus">尚未生成</span>
@@ -387,6 +415,10 @@ function defaultState() {
       performance: "克制、警觉；用呼吸、停顿和视线反应推进，不做夸张表情。",
       negative: "不要新增人物；不要换装；不要真实外卖平台 Logo；不要生成可读字幕；不要血腥；不要鬼影；不要改变门、门链或人物左右位置。"
     },
+    relations: [
+      { a: "C01", b: "C02", label: "陌生 / 互相试探", note: "林夏是住户，陈默是外卖员；两人在门链两侧建立第一次不信任接触。" }
+    ],
+    lastAdaptation: null,
     history: [],
     lastPrompt: ""
   };
@@ -403,6 +435,8 @@ const selectionCount = $("selectionCount");
 const assetList = $("assetList");
 const assetTabs = $("assetTabs");
 const consistencyStatus = $("consistencyStatus");
+const relationList = $("relationList");
+const adaptationPanel = $("adaptationPanel");
 const promptOutput = $("promptOutput");
 const promptLength = $("promptLength");
 const promptStatus = $("promptStatus");
@@ -525,6 +559,28 @@ function renderAssets() {
     assetList.appendChild(card);
   });
   renderConsistency();
+  renderRelationships();
+}
+
+function renderRelationships() {
+  if (!relationList) return;
+  const selectedIds = new Set(state.selectedAssetIds);
+  const selected = state.assets.filter(a => selectedIds.has(a.id));
+  const relations = (state.relations || []).filter(rel => selectedIds.has(rel.a) && selectedIds.has(rel.b));
+  if (!selected.length) {
+    relationList.innerHTML = `<span class="model-note">选中人物或场景后显示关系。</span>`;
+    return;
+  }
+  if (!relations.length) {
+    relationList.innerHTML = `<span class="model-note">暂无显式关系卡；生成时按正文称谓、站位和动作推断，不要擅自新增亲属关系。</span>`;
+    return;
+  }
+  relationList.innerHTML = relations.map(rel => {
+    const a = state.assets.find(x => x.id === rel.a);
+    const b = state.assets.find(x => x.id === rel.b);
+    const label = `${a?.name || rel.a} ↔ ${b?.name || rel.b} · ${rel.label || "关系待确认"}`;
+    return `<span class="relation-chip" title="${escapeHTML(rel.note || "")}">${escapeHTML(label)}</span>`;
+  }).join("");
 }
 
 function assetToText(asset) {
@@ -614,6 +670,222 @@ function updateConsistencyStatus() {
 
 function addToastIfNeeded() {}
 
+function classifyBeat(text) {
+  if (/[“”「」『』]/.test(text) || /(说|问|喊|答|道)/.test(text)) return "dialogue";
+  if (/(想|心里|意识|发现|觉得|记得|似乎|仿佛|回忆|梦|眼前)/.test(text)) return "inner";
+  if (/(手机|屏幕|短信|备注|订单|纸条|信|照片|日记|快递单)/.test(text)) return "text_clue";
+  if (/(雨|风|响|敲门|脚步|吱呀|鼠|鸡|声音|灯灭|回声)/.test(text)) return "sound";
+  if (/(跑|冲|走|转身|推|拉|拿|放|打开|关|跪下|磕头|抬|举|抓|翻|盯|看|赶回|张着|敷|合上|歪|拧|摸|按|擦|洗|碰)/.test(text)) return "action";
+  return "description";
+}
+
+function pickVaried(pool, recent, index = 0) {
+  let choice = pool[(index + recent.length) % pool.length];
+  if (recent.length >= 2 && recent[recent.length - 1] === recent[recent.length - 2] && recent[recent.length - 1] === choice) {
+    choice = pool.find(item => item !== choice) || choice;
+  }
+  return choice;
+}
+
+function dialogueQuotes(text) {
+  const quotes = [];
+  for (const match of text.matchAll(/[“「『](.*?)[”」』]/g)) {
+    const quote = match[1].trim();
+    if (quote) quotes.push(quote);
+  }
+  return quotes;
+}
+
+function relationTextForBeat(selected) {
+  const relationPairs = (state.relations || []).filter(rel => {
+    const ids = new Set(selected.map(a => a.id));
+    return ids.has(rel.a) && ids.has(rel.b);
+  });
+  if (relationPairs.length) {
+    return relationPairs.map(rel => {
+      const a = state.assets.find(x => x.id === rel.a)?.name || rel.a;
+      const b = state.assets.find(x => x.id === rel.b)?.name || rel.b;
+      return `${a} ↔ ${b}：${rel.label || "关系待确认"}${rel.note ? `（${rel.note}）` : ""}`;
+    }).join("；");
+  }
+  if (selected.length >= 2) return "用双人距离、视线和站位表现关系；未提供显式关系时按正文称谓和动作推断。";
+  return "单人调度，用留白、框中框或环境压迫表现人物状态。";
+}
+
+function autoBreakdown() {
+  captureSelection(false);
+  if (!state.selection.trim()) {
+    toast("请先在小说文本中选中一段文字");
+    return;
+  }
+  const sentences = splitSentences(state.selection);
+  if (!sentences.length) {
+    toast("选区内没有可用句子");
+    return;
+  }
+  const maxBeats = 6;
+  const groupSize = Math.ceil(sentences.length / maxBeats);
+  const groups = [];
+  for (let i = 0; i < sentences.length; i += groupSize) {
+    groups.push(sentences.slice(i, i + groupSize).join(""));
+  }
+  const selected = selectedAssets();
+  const shotPools = {
+    dialogue: ["中近景", "过肩中景", "双人中景", "近景"],
+    inner: ["近景", "特写", "插入镜"],
+    text_clue: ["大特写", "插入镜", "近景"],
+    sound: ["特写", "中景", "近景"],
+    action: ["全景", "中景", "近景", "插入镜"],
+    description: ["远景", "全景", "中景", "插入镜"],
+    establish: ["远景", "全景", "中景"]
+  };
+  const anglePools = {
+    dialogue: ["过肩/侧向双人", "平视双人中景", "反打近景"],
+    inner: ["近景浅景深", "侧后方近景", "俯视小幅压迫"],
+    text_clue: ["俯拍插入镜", "手部大特写", "平视近景"],
+    sound: ["声源特写", "人物反应近景", "门口/窗边中景"],
+    action: ["平视全景", "略低机位中景", "侧面跟随"],
+    description: ["建立空间的全景", "环境细节插入", "人物与环境同框"]
+  };
+  const reasons = {
+    dialogue: "对白负责信息，画面负责反应、权力距离和潜台词，避免把台词再念成旁白。",
+    inner: "心理内容优先用停顿、视线、手部或环境物件表现；只有确实无法可见化时才保留短VO。",
+    text_clue: "文字信息交给插入镜和后期合成，不让模型承担精确可读中文。",
+    sound: "先让画外声出现，再切人物反应或声源，制造空间和悬念。",
+    action: "动作与空间关系直接可见，不需要旁白复述。",
+    description: "环境和关系用构图、光源、材质和人物距离呈现，避免说明书式旁白。"
+  };
+  let recentShots = [];
+  let recentCameras = [];
+  const beats = groups.map((text, index) => {
+    const type = index === 0 ? (classifyBeat(text) === "description" ? "description" : classifyBeat(text)) : classifyBeat(text);
+    const pool = shotPools[type] || shotPools.description;
+    const shotSize = pickVaried(pool, recentShots, index);
+    recentShots.push(shotSize);
+    const cameraPool = type === "description" ? ["[static]", "[pan]"] : type === "inner" ? ["[zoom]", "[static]"] : type === "action" ? ["[pan]", "[static]"] : ["[static]", "[pan]"];
+    const camera = pickVaried(cameraPool, recentCameras, index);
+    recentCameras.push(camera);
+    const quotes = dialogueQuotes(text);
+    const visual = type === "dialogue"
+      ? `用${shotSize}呈现说话人与听者的反应，优先给听者反应和手部细节，不让两个角色都正脸直视镜头。`
+      : type === "inner"
+        ? `用${shotSize}拍人物的停顿、呼吸、视线或手中物件，把心理变化外化为可见动作。`
+        : type === "text_clue"
+          ? `用${shotSize}插入镜头呈现文字或物件，屏幕内容、姓名和数字留到后期合成。`
+          : type === "sound"
+            ? `先让声音进入，再用${shotSize}切到人物反应或声源；声音的方向和空间保持一致。`
+            : type === "action"
+              ? `用${shotSize}直接呈现动作，明确起始位置、动作路径和结束位置。`
+              : `用${shotSize}建立环境、人物距离和空间信息，把原文说明转成可见细节。`;
+    const voice = type === "dialogue"
+      ? (quotes.length ? `对白：${quotes.join(" / ")}` : "对白：按原文称谓和动作写成短句；不要加解释性旁白。")
+      : type === "inner"
+        ? "旁白：无旁白优先；若无法从表演看懂，只保留一句短VO，不复述画面。"
+        : type === "text_clue"
+          ? "旁白：不念出屏幕文字；必要时只保留一句信息型VO。"
+          : "旁白：无旁白；让画面、声音和人物反应承担信息。";
+    const sound = type === "sound"
+      ? `画外声/拟音优先：${text.slice(0, 90)}`
+      : type === "dialogue" ? "保留呼吸、环境和对话间隙；不要用配乐盖住潜台词。" : "环境声与动作拟音跟随画面，不额外加解释性音乐。";
+    return {
+      index: index + 1,
+      shotId: `${state.settings.shotId}-B${String(index + 1).padStart(2, "0")}`,
+      function: index === 0 ? "建立空间 / 异常" : index === groups.length - 1 ? "收束 / 留悬念" : type === "dialogue" ? "关系推进" : type === "inner" ? "人物反应" : "信息推进",
+      type,
+      mode: type === "dialogue" ? "对白 + 反应镜" : type === "inner" ? "表演 / 物件 / 必要时 VO" : type === "text_clue" ? "文字插入镜" : type === "sound" ? "画外声 + 反应" : type === "action" ? "可见动作" : "环境 / 道具视觉化",
+      source: text,
+      visual,
+      voice,
+      sound,
+      relation: relationTextForBeat(selected),
+      shotSize,
+      angle: anglePools[type] ? anglePools[type][index % anglePools[type].length] : "平视",
+      camera,
+      lens: type === "text_clue" ? "微距 / 50mm" : type === "dialogue" ? "35–50mm" : "35–50mm",
+      reason: reasons[type] || reasons.description,
+      duration: Math.max(2, Math.min(6, Math.ceil(text.length / 22)))
+    };
+  });
+  state.lastAdaptation = { beats, relations: (state.relations || []).filter(rel => new Set(selected.map(a => a.id)).has(rel.a) && new Set(selected.map(a => a.id)).has(rel.b)) };
+  renderAdaptation();
+  persist();
+  toast(`已拆成 ${beats.length} 个节拍`);
+}
+
+function renderAdaptation() {
+  const data = state.lastAdaptation;
+  if (!data || !data.beats?.length) {
+    adaptationPanel.textContent = "选中小说区域后点击“自动拆解选区”。";
+    return;
+  }
+  adaptationPanel.innerHTML = data.beats.map(beat => `
+    <article class="beat-card">
+      <div class="beat-head">
+        <div class="beat-title">节拍 ${String(beat.index).padStart(2,"0")} · ${escapeHTML(beat.function)}</div>
+        <div class="badge-row"><span class="badge visual">${escapeHTML(beat.mode)}</span><span class="badge voice">${escapeHTML(beat.shotSize)}</span><span class="badge">${escapeHTML(beat.camera)}</span></div>
+      </div>
+      <div class="beat-source">原文节拍：${escapeHTML(beat.source)}</div>
+      <div class="beat-grid">
+        <div class="beat-field"><b>画面</b>${escapeHTML(beat.visual)}</div>
+        <div class="beat-field"><b>声音/台词</b>${escapeHTML(beat.voice)}<br>${escapeHTML(beat.sound)}</div>
+        <div class="beat-field"><b>关系调度</b>${escapeHTML(beat.relation)}</div>
+        <div class="beat-field"><b>镜头</b>${escapeHTML(beat.angle)}；${escapeHTML(beat.camera)}；${escapeHTML(beat.lens)}</div>
+      </div>
+      <div class="beat-field" style="margin-top:7px"><b>为什么这样拍</b>${escapeHTML(beat.reason)}</div>
+      <div class="beat-actions"><button class="btn btn-small btn-primary" type="button" data-apply-beat="${beat.index}">应用到单镜</button></div>
+    </article>`).join("");
+  adaptationPanel.querySelectorAll("[data-apply-beat]").forEach(btn => {
+    btn.addEventListener("click", () => applyBeat(Number(btn.dataset.applyBeat)));
+  });
+}
+
+function applyBeat(index) {
+  const beat = state.lastAdaptation?.beats?.find(item => item.index === index);
+  if (!beat) return;
+  state.settings.shotId = beat.shotId;
+  state.settings.duration = Math.max(4, Math.min(15, 4 + beat.duration));
+  state.settings.shotSize = beat.shotSize;
+  state.settings.camera = beat.camera;
+  state.settings.angle = beat.angle;
+  state.settings.objective = beat.function + "：" + beat.reason;
+  state.settings.action = beat.source;
+  state.settings.ending = beat.visual;
+  state.settings.audio = beat.sound;
+  initForm();
+  persist();
+  toast(`已应用到 ${beat.shotId}`);
+  promptOutput.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function copyAdaptation() {
+  const data = state.lastAdaptation;
+  if (!data?.beats?.length) return toast("先自动拆解选区");
+  const lines = [
+    "# 小说选区分镜方案",
+    "",
+    `选区原文：${state.selection}`,
+    "",
+    "## 人物关系",
+    ...(data.relations.length ? data.relations.map(rel => {
+      const a = state.assets.find(x => x.id === rel.a)?.name || rel.a;
+      const b = state.assets.find(x => x.id === rel.b)?.name || rel.b;
+      return `- ${a} ↔ ${b}：${rel.label || "待确认"}${rel.note ? `（${rel.note}）` : ""}`;
+    }) : ["- 未记录显式关系；按正文称谓、距离和动作推断。"]),
+    "",
+    "## 节拍分配",
+    "| 节拍 | 叙事功能 | 呈现方式 | 画面 | 对白/旁白 | 镜头 | 声音 | 关系调度 |",
+    "|---|---|---|---|---|---|---|---|",
+    ...data.beats.map(beat => `| ${beat.index} | ${beat.function} | ${beat.mode} | ${beat.visual.replace(/\n/g," ")} | ${beat.voice.replace(/\n/g," ")} | ${beat.shotSize}；${beat.angle}；${beat.camera} | ${beat.sound.replace(/\n/g," ")} | ${beat.relation.replace(/\n/g," ")} |`),
+    "",
+    "## 反重复检查",
+    "- 避免连续三个节拍使用同一景别；",
+    "- 不把每句对白都拍成同一种近景；",
+    "- 至少保留建立空间、动作、反应、插入或关系镜头中的三种；",
+    "- 旁白只补充画面无法传达的信息。"
+  ];
+  copyText(lines.join("\n"), "分镜方案已复制");
+}
+
 function suggestShotFromSelection() {
   const text = state.selection || novelText.value.slice(0, 120);
   if (!text) return;
@@ -683,6 +955,16 @@ function buildPrompt() {
   const modeLabel = ({ reference:"参考生成", i2v:"首帧图生视频", "first-last":"首尾帧生成", t2v:"文生视频" })[effectiveMode] || "文生视频";
   const refText = refs.length ? refs.join("\n") : "无图片或文字资产锁定；按正文描述生成。";
   const selectedList = selected.map(a => `${a.id} ${a.name}`).join("、") || "无";
+  const relationPrompt = (() => {
+    const ids = new Set(selected.map(a => a.id));
+    const relations = (state.relations || []).filter(rel => ids.has(rel.a) && ids.has(rel.b));
+    if (relations.length) return relations.map(rel => {
+      const a = selected.find(x => x.id === rel.a)?.name || rel.a;
+      const b = selected.find(x => x.id === rel.b)?.name || rel.b;
+      return `${a} ↔ ${b}：${rel.label || "关系待确认"}${rel.note ? `（${rel.note}）` : ""}`;
+    }).join("\n");
+    return "未记录显式关系；按正文称谓、站位、视线和动作推断，不要自行新增亲属关系。";
+  })();
   return `MiniMax H3 视频生成提示词
 模式：${modeLabel}
 输出：${duration} 秒；${state.settings.ratio}；${state.settings.resolution}；24 fps；使用原生立体声。
@@ -690,6 +972,9 @@ function buildPrompt() {
 
 参考素材：
 ${refText}
+
+人物关系与调度：
+${relationPrompt}
 
 选区原文：
 「${state.selection}」
@@ -1077,7 +1362,8 @@ function importAssetPack(file) {
       state.selectedAssetIds = [];
       state.activeAssetTab = "character";
       if (parsed.settings) state.settings = { ...state.settings, ...parsed.settings };
-      persist(); initForm(); renderAssets(); toast(`已导入 ${normalized.length} 个资产`);
+      state.relations = Array.isArray(parsed.relations) ? parsed.relations : [];
+      persist(); initForm(); renderAssets(); renderRelationships(); toast(`已导入 ${normalized.length} 个资产`);
       $("importAssetInput").value = "";
     } catch (error) {
       console.error(error);
@@ -1105,7 +1391,9 @@ function importProject(file) {
       if (!state.assets) state.assets = [];
       if (!state.history) state.history = [];
       if (!state.settings) state.settings = defaultState().settings;
-      initForm(); novelText.value = state.novelText || ""; renderSelection(); renderAssets(); renderHistory(); updateTextMeta(); persist();
+      if (!Array.isArray(state.relations)) state.relations = [];
+      if (!state.lastAdaptation) state.lastAdaptation = null;
+      initForm(); novelText.value = state.novelText || ""; renderSelection(); renderAssets(); renderRelationships(); renderAdaptation(); renderHistory(); updateTextMeta(); persist();
       toast("项目已导入");
     } catch {
       toast("项目 JSON 无法读取");
@@ -1119,7 +1407,7 @@ function resetAll() {
   state = defaultState();
   selectedImageData = "";
   selectedImageName = "";
-  initForm(); novelText.value = state.novelText; renderSelection(); renderAssets(); renderHistory(); updateTextMeta(); persist();
+  initForm(); novelText.value = state.novelText; renderSelection(); renderAssets(); renderRelationships(); renderAdaptation(); renderHistory(); updateTextMeta(); persist();
   promptOutput.textContent = "选中小说的某个区域，确认人物/场景卡，然后点击“生成 H3 提示词”。";
   promptLength.textContent = "0 / 7000 字符"; promptStatus.textContent = "尚未生成"; promptStatus.className = "";
   toast("已载入示例");
@@ -1130,6 +1418,8 @@ function bind() {
   $("clearBtn").addEventListener("click", resetAll);
   $("captureSelectionBtn").addEventListener("click", captureSelection);
   $("fitSelectionBtn").addEventListener("click", () => { captureSelection(false); suggestShotFromSelection(); toast("已用选区填充镜头字段"); });
+  $("autoBreakdownBtn").addEventListener("click", autoBreakdown);
+  $("copyAdaptationBtn").addEventListener("click", copyAdaptation);
   $("selectMatchedBtn").addEventListener("click", () => { autoMatchAssets(); renderAssets(); persist(); });
   $("generateBtn").addEventListener("click", generate);
   $("copyPromptBtn").addEventListener("click", () => {
@@ -1172,6 +1462,8 @@ function renderAll() {
   initForm();
   renderSelection();
   renderAssets();
+  renderRelationships();
+  renderAdaptation();
   renderHistory();
   if (state.lastPrompt) {
     promptOutput.textContent = state.lastPrompt;
