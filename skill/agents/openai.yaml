@@ -1,6 +1,6 @@
 interface:
   display_name: "短剧制作工作台"
-  short_description: "导入小说选区分镜，锁定人物场景一致性并生成 H3 视频提示词"
-  default_prompt: "使用 $short-drama-production，把我的小说选区转成锁定人物与场景一致性的 MiniMax H3 分镜和视频提示词。"
+  short_description: "导入小说选区，自动分配画面与旁白、梳理人物关系并生成 H3 分镜"
+  default_prompt: "使用 $short-drama-production，把我的小说选区自动拆成画面、对白和旁白节拍，梳理人物关系并生成不重复的 MiniMax H3 分镜。"
 policy:
   allow_implicit_invocation: true
